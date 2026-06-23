@@ -133,11 +133,6 @@
           <input type="password" id="cf-api-token" placeholder="Nhập Cloudflare API Token">
         </div>
 
-        <div class="form-checkbox">
-          <input type="checkbox" id="use-default-creds" checked>
-          <label for="use-default-creds">Sử dụng thông tin mặc định từ hệ thống (Đã điền sẵn)</label>
-        </div>
-
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" id="btn-cancel-modal">Hủy</button>
           <button type="submit" class="btn btn-primary" id="btn-submit-create">
@@ -454,6 +449,53 @@ else:
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="btn-close-api-footer">Đóng</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cloudflare Credentials Manager -->
+  <div class="modal-backdrop" id="credentials-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3>Chỉnh sửa Key Cloudflare</h3>
+          <p class="modal-subtitle" id="creds-site-name-text">Website: -</p>
+        </div>
+        <button class="btn-close" id="btn-close-creds">&times;</button>
+      </div>
+      <form id="creds-form" class="modal-body">
+        <div class="form-group">
+          <label for="creds-auth-type">Loại xác thực</label>
+          <select id="creds-auth-type">
+            <option value="key" selected>Global API Key & Email (Mặc định)</option>
+            <option value="token">Scoped API Token</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="creds-account-id">Account ID <span class="required">*</span></label>
+          <input type="text" id="creds-account-id" placeholder="Nhập Cloudflare Account ID" required>
+        </div>
+
+        <div class="form-group" id="creds-group-api-key">
+          <label for="creds-api-key">Global API Key <span class="required">*</span></label>
+          <input type="password" id="creds-api-key" placeholder="Nhập Cloudflare Global API Key">
+        </div>
+
+        <div class="form-group" id="creds-group-email">
+          <label for="creds-email">Cloudflare Email <span class="required">*</span></label>
+          <input type="email" id="creds-email" placeholder="ví dụ: user@example.com">
+        </div>
+
+        <div class="form-group d-none" id="creds-group-api-token">
+          <label for="creds-api-token">API Token <span class="required">*</span></label>
+          <input type="password" id="creds-api-token" placeholder="Nhập Cloudflare API Token">
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-creds">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-creds">Lưu cấu hình</button>
+        </div>
+      </form>
     </div>
   </div>
 

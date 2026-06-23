@@ -20,9 +20,7 @@ const LOGS_DIR = path.join(process.cwd(), 'logs');
 const SITES_DIR = path.join(process.cwd(), 'sites');
 const TEMPLATE_DIR = path.join(process.cwd(), 'templates', 'ngo-quyen');
 
-const DEFAULT_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || '';
-const DEFAULT_API_KEY = process.env.CLOUDFLARE_API_KEY || '';
-const DEFAULT_EMAIL = process.env.CLOUDFLARE_EMAIL || '';
+
 
 // Ensure directories exist
 await fs.mkdir(LOGS_DIR, { recursive: true });
@@ -119,13 +117,7 @@ async function writeDb(data) {
 
 // API Endpoints
 
-app.get('/api/config', (req, res) => {
-  res.json({
-    DEFAULT_ACCOUNT_ID,
-    DEFAULT_API_KEY,
-    DEFAULT_EMAIL
-  });
-});
+
 
 // 1. Get all sites
 app.get('/api/sites', async (req, res) => {
@@ -220,10 +212,10 @@ app.post('/api/sites', async (req, res) => {
   // Start background deploy task
   deploySite(name, {
     template: chosenTemplate,
-    apiKey: site.apiKey || apiKey || DEFAULT_API_KEY,
-    email: site.email || email || DEFAULT_EMAIL,
+    apiKey: site.apiKey || apiKey || '',
+    email: site.email || email || '',
     apiToken: site.apiToken || apiToken || '',
-    accountId: site.accountId || accountId || DEFAULT_ACCOUNT_ID
+    accountId: site.accountId || accountId || ''
   }).catch(async (err) => {
     await writeLog(name, `\nDEPLOYMENT FAILED: ${err.message}\n`, true);
     const currentDb = await readDb();
@@ -253,10 +245,10 @@ app.delete('/api/sites/:name', async (req, res) => {
   // Perform Cloudflare deletion in background if requested
   if (deleteCloudflareResources) {
     const resolvedCreds = {
-      apiKey: apiKey || site.apiKey || DEFAULT_API_KEY,
-      email: email || site.email || DEFAULT_EMAIL,
+      apiKey: apiKey || site.apiKey || '',
+      email: email || site.email || '',
       apiToken: apiToken || site.apiToken || '',
-      accountId: accountId || site.accountId || DEFAULT_ACCOUNT_ID
+      accountId: accountId || site.accountId || ''
     };
     deleteResourcesFromCloudflare(site, resolvedCreds).catch((err) => {
       console.error(`Failed to delete Cloudflare resources for ${name}:`, err);
@@ -555,9 +547,9 @@ app.get('/api/sites/:name/settings', async (req, res) => {
   const envOptions = {
     env: {
       ...process.env,
-      CLOUDFLARE_API_KEY: site.apiKey || DEFAULT_API_KEY,
-      CLOUDFLARE_EMAIL: site.email || DEFAULT_EMAIL,
-      CLOUDFLARE_ACCOUNT_ID: site.accountId || DEFAULT_ACCOUNT_ID,
+      CLOUDFLARE_API_KEY: site.apiKey || '',
+      CLOUDFLARE_EMAIL: site.email || '',
+      CLOUDFLARE_ACCOUNT_ID: site.accountId || '',
       CLOUDFLARE_API_TOKEN: site.apiToken || ''
     }
   };
@@ -631,9 +623,9 @@ app.post('/api/sites/:name/settings', async (req, res) => {
   const envOptions = {
     env: {
       ...process.env,
-      CLOUDFLARE_API_KEY: site.apiKey || DEFAULT_API_KEY,
-      CLOUDFLARE_EMAIL: site.email || DEFAULT_EMAIL,
-      CLOUDFLARE_ACCOUNT_ID: site.accountId || DEFAULT_ACCOUNT_ID,
+      CLOUDFLARE_API_KEY: site.apiKey || '',
+      CLOUDFLARE_EMAIL: site.email || '',
+      CLOUDFLARE_ACCOUNT_ID: site.accountId || '',
       CLOUDFLARE_API_TOKEN: site.apiToken || ''
     }
   };
@@ -683,6 +675,26 @@ app.post('/api/sites/:name/settings', async (req, res) => {
   }
 });
 
+// POST /api/sites/:name/credentials — Save site credentials to db.json
+app.post('/api/sites/:name/credentials', async (req, res) => {
+  const { name } = req.params;
+  const { accountId, apiKey, email, apiToken } = req.body;
+
+  const db = await readDb();
+  const site = db.sites.find(s => s.name === name);
+  if (!site) {
+    return res.status(404).json({ error: 'Site not found.' });
+  }
+
+  site.accountId = accountId || '';
+  site.apiKey = apiKey || '';
+  site.email = email || '';
+  site.apiToken = apiToken || '';
+
+  await writeDb(db);
+  res.json({ success: true, site });
+});
+
 // GET /api/sites/:name/api-keys — List API keys for site
 app.get('/api/sites/:name/api-keys', async (req, res) => {
   const { name } = req.params;
@@ -695,9 +707,9 @@ app.get('/api/sites/:name/api-keys', async (req, res) => {
   const envOptions = {
     env: {
       ...process.env,
-      CLOUDFLARE_API_KEY: site.apiKey || DEFAULT_API_KEY,
-      CLOUDFLARE_EMAIL: site.email || DEFAULT_EMAIL,
-      CLOUDFLARE_ACCOUNT_ID: site.accountId || DEFAULT_ACCOUNT_ID,
+      CLOUDFLARE_API_KEY: site.apiKey || '',
+      CLOUDFLARE_EMAIL: site.email || '',
+      CLOUDFLARE_ACCOUNT_ID: site.accountId || '',
       CLOUDFLARE_API_TOKEN: site.apiToken || ''
     }
   };
@@ -749,9 +761,9 @@ app.post('/api/sites/:name/api-keys', async (req, res) => {
   const envOptions = {
     env: {
       ...process.env,
-      CLOUDFLARE_API_KEY: site.apiKey || DEFAULT_API_KEY,
-      CLOUDFLARE_EMAIL: site.email || DEFAULT_EMAIL,
-      CLOUDFLARE_ACCOUNT_ID: site.accountId || DEFAULT_ACCOUNT_ID,
+      CLOUDFLARE_API_KEY: site.apiKey || '',
+      CLOUDFLARE_EMAIL: site.email || '',
+      CLOUDFLARE_ACCOUNT_ID: site.accountId || '',
       CLOUDFLARE_API_TOKEN: site.apiToken || ''
     }
   };
@@ -827,9 +839,9 @@ app.delete('/api/sites/:name/api-keys/:id', async (req, res) => {
   const envOptions = {
     env: {
       ...process.env,
-      CLOUDFLARE_API_KEY: site.apiKey || DEFAULT_API_KEY,
-      CLOUDFLARE_EMAIL: site.email || DEFAULT_EMAIL,
-      CLOUDFLARE_ACCOUNT_ID: site.accountId || DEFAULT_ACCOUNT_ID,
+      CLOUDFLARE_API_KEY: site.apiKey || '',
+      CLOUDFLARE_EMAIL: site.email || '',
+      CLOUDFLARE_ACCOUNT_ID: site.accountId || '',
       CLOUDFLARE_API_TOKEN: site.apiToken || ''
     }
   };

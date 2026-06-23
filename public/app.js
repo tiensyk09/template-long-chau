@@ -1,8 +1,4 @@
 // App configuration & state
-let DEFAULT_ACCOUNT_ID = '';
-let DEFAULT_API_KEY = '';
-let DEFAULT_EMAIL = '';
-
 let sites = [];
 let activeLogEventSource = null;
 let activeLogSiteName = '';
@@ -27,7 +23,6 @@ const btnCancelDelete = document.getElementById('btn-cancel-delete');
 const btnConfirmDelete = document.getElementById('btn-confirm-delete');
 
 const createSiteForm = document.getElementById('create-site-form');
-const useDefaultCredsCheckbox = document.getElementById('use-default-creds');
 const cfAuthTypeSelect = document.getElementById('cf-auth-type');
 const cfAccountIdInput = document.getElementById('cf-account-id');
 const cfApiKeyInput = document.getElementById('cf-api-key');
@@ -37,6 +32,22 @@ const cfApiTokenInput = document.getElementById('cf-api-token');
 const groupApiKey = document.getElementById('group-api-key');
 const groupEmail = document.getElementById('group-email');
 const groupApiToken = document.getElementById('group-api-token');
+
+// Credentials Modal Elements
+const credentialsModal = document.getElementById('credentials-modal');
+const credsForm = document.getElementById('creds-form');
+const credsAuthTypeSelect = document.getElementById('creds-auth-type');
+const credsAccountIdInput = document.getElementById('creds-account-id');
+const credsApiKeyInput = document.getElementById('creds-api-key');
+const credsEmailInput = document.getElementById('creds-email');
+const credsApiTokenInput = document.getElementById('creds-api-token');
+
+const credsGroupApiKey = document.getElementById('creds-group-api-key');
+const credsGroupEmail = document.getElementById('creds-group-email');
+const credsGroupApiToken = document.getElementById('creds-group-api-token');
+
+const btnCloseCreds = document.getElementById('btn-close-creds');
+const btnCancelCreds = document.getElementById('btn-cancel-creds');
 
 const sitesGrid = document.getElementById('sites-grid');
 const searchInput = document.getElementById('search-input');
@@ -61,33 +72,19 @@ let siteToDelete = '';
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
-  await fetchConfig();
+  loadCachedCredentials();
   toggleCredsFields();
   fetchSites();
   // Poll sites status every 5 seconds to keep status updated
   setInterval(fetchSites, 5000);
 });
 
-async function fetchConfig() {
-  try {
-    const res = await fetch('/api/config');
-    if (res.ok) {
-      const data = await res.json();
-      DEFAULT_ACCOUNT_ID = data.DEFAULT_ACCOUNT_ID || '';
-      DEFAULT_API_KEY = data.DEFAULT_API_KEY || '';
-      DEFAULT_EMAIL = data.DEFAULT_EMAIL || '';
-    }
-  } catch (err) {
-    console.error('Error fetching config:', err);
-  }
-}
-
 // Setup Event Listeners
 function setupEventListeners() {
   // Modal open/close
   btnOpenModal.addEventListener('click', () => {
     createSiteForm.reset();
-    useDefaultCredsCheckbox.checked = true;
+    loadCachedCredentials();
     toggleCredsFields();
     createModal.classList.add('open');
   });
@@ -112,8 +109,7 @@ function setupEventListeners() {
   document.getElementById('btn-cancel-settings').addEventListener('click', () => settingsModal.classList.remove('open'));
   settingsForm.addEventListener('submit', handleSettingsFormSubmit);
 
-  // Checkbox toggle
-  useDefaultCredsCheckbox.addEventListener('change', toggleCredsFields);
+  // Toggle credential fields on auth type change
   cfAuthTypeSelect.addEventListener('change', toggleCredsFields);
 
   // Search filter
@@ -121,51 +117,89 @@ function setupEventListeners() {
 
   // Create Form Submit
   createSiteForm.addEventListener('submit', handleFormSubmit);
+
+  // Credentials Modal Triggers
+  btnCloseCreds.addEventListener('click', closeCredentialsModal);
+  btnCancelCreds.addEventListener('click', closeCredentialsModal);
+  credsForm.addEventListener('submit', handleCredsFormSubmit);
+  credsAuthTypeSelect.addEventListener('change', toggleEditCredsFields);
+}
+
+// Load credentials from browser localStorage
+function loadCachedCredentials() {
+  const cachedAccountId = localStorage.getItem('last_cf_account_id');
+  const cachedAuthType = localStorage.getItem('last_cf_auth_type');
+  const cachedApiKey = localStorage.getItem('last_cf_api_key');
+  const cachedEmail = localStorage.getItem('last_cf_email');
+  const cachedApiToken = localStorage.getItem('last_cf_api_token');
+
+  if (cachedAccountId) cfAccountIdInput.value = cachedAccountId;
+  if (cachedAuthType) cfAuthTypeSelect.value = cachedAuthType;
+  if (cachedApiKey) cfApiKeyInput.value = cachedApiKey;
+  if (cachedEmail) cfEmailInput.value = cachedEmail;
+  if (cachedApiToken) cfApiTokenInput.value = cachedApiToken;
+}
+
+// Save credentials to browser localStorage
+function saveCachedCredentials(accountId, authType, apiKey, email, apiToken) {
+  localStorage.setItem('last_cf_account_id', accountId || '');
+  localStorage.setItem('last_cf_auth_type', authType || 'key');
+  localStorage.setItem('last_cf_api_key', apiKey || '');
+  localStorage.setItem('last_cf_email', email || '');
+  localStorage.setItem('last_cf_api_token', apiToken || '');
 }
 
 // Toggle Credential fields based on selections
 function toggleCredsFields() {
-  const useDefaults = useDefaultCredsCheckbox.checked;
-  
-  if (useDefaults) {
-    cfAccountIdInput.value = DEFAULT_ACCOUNT_ID;
-    cfAccountIdInput.disabled = true;
-    cfAuthTypeSelect.value = 'key';
-    cfAuthTypeSelect.disabled = true;
-    
-    cfApiKeyInput.value = DEFAULT_API_KEY;
-    cfEmailInput.value = DEFAULT_EMAIL;
-    
+  cfAccountIdInput.disabled = false;
+  cfAuthTypeSelect.disabled = false;
+  cfApiKeyInput.disabled = false;
+  cfEmailInput.disabled = false;
+  cfApiTokenInput.disabled = false;
+
+  if (cfAuthTypeSelect.value === 'key') {
     groupApiKey.classList.remove('d-none');
     groupEmail.classList.remove('d-none');
     groupApiToken.classList.add('d-none');
     
-    cfApiKeyInput.disabled = true;
-    cfEmailInput.disabled = true;
+    cfApiKeyInput.required = true;
+    cfEmailInput.required = true;
+    cfApiTokenInput.required = false;
   } else {
-    cfAccountIdInput.disabled = false;
-    cfAuthTypeSelect.disabled = false;
-    cfApiKeyInput.disabled = false;
-    cfEmailInput.disabled = false;
-    cfApiTokenInput.disabled = false;
+    groupApiKey.classList.add('d-none');
+    groupEmail.classList.add('d-none');
+    groupApiToken.classList.remove('d-none');
+    
+    cfApiKeyInput.required = false;
+    cfEmailInput.required = false;
+    cfApiTokenInput.required = true;
+  }
+}
 
-    if (cfAuthTypeSelect.value === 'key') {
-      groupApiKey.classList.remove('d-none');
-      groupEmail.classList.remove('d-none');
-      groupApiToken.classList.add('d-none');
-      
-      cfApiKeyInput.required = true;
-      cfEmailInput.required = true;
-      cfApiTokenInput.required = false;
-    } else {
-      groupApiKey.classList.add('d-none');
-      groupEmail.classList.add('d-none');
-      groupApiToken.classList.remove('d-none');
-      
-      cfApiKeyInput.required = false;
-      cfEmailInput.required = false;
-      cfApiTokenInput.required = true;
-    }
+// Toggle edit credentials fields in edit modal
+function toggleEditCredsFields() {
+  credsAccountIdInput.disabled = false;
+  credsAuthTypeSelect.disabled = false;
+  credsApiKeyInput.disabled = false;
+  credsEmailInput.disabled = false;
+  credsApiTokenInput.disabled = false;
+
+  if (credsAuthTypeSelect.value === 'key') {
+    credsGroupApiKey.classList.remove('d-none');
+    credsGroupEmail.classList.remove('d-none');
+    credsGroupApiToken.classList.add('d-none');
+    
+    credsApiKeyInput.required = true;
+    credsEmailInput.required = true;
+    credsApiTokenInput.required = false;
+  } else {
+    credsGroupApiKey.classList.add('d-none');
+    credsGroupEmail.classList.add('d-none');
+    credsGroupApiToken.classList.remove('d-none');
+    
+    credsApiKeyInput.required = false;
+    credsEmailInput.required = false;
+    credsApiTokenInput.required = true;
   }
 }
 
@@ -257,6 +291,7 @@ function renderSites() {
 
       <div class="card-actions">
         <button class="btn btn-secondary btn-sm" onclick="openLogConsole('${site.name}')">🔎 Xem Log</button>
+        <button class="btn btn-secondary btn-sm" onclick="openCredentialsModal('${site.name}')">🔑 Cloudflare Key</button>
         <button class="btn btn-secondary btn-sm" onclick="openSettingsModal('${site.name}')" ${site.status !== 'active' ? 'disabled' : ''}>⚙️ Cấu hình</button>
         <button class="btn btn-secondary btn-sm" onclick="openApiKeysModal('${site.name}')" ${site.status !== 'active' ? 'disabled' : ''}>🔑 API Keys</button>
         <button class="btn btn-secondary btn-sm" onclick="triggerRedeploy('${site.name}')" ${site.status === 'deploying' ? 'disabled' : ''}>🔄 Re-deploy</button>
@@ -273,16 +308,23 @@ async function handleFormSubmit(e) {
 
   const name = document.getElementById('site-name').value.trim();
   const template = document.getElementById('site-template').value;
-  const useDefaults = useDefaultCredsCheckbox.checked;
+  const authType = cfAuthTypeSelect.value;
+  const accountId = cfAccountIdInput.value.trim();
+  const apiKey = authType === 'key' ? cfApiKeyInput.value.trim() : '';
+  const email = authType === 'key' ? cfEmailInput.value.trim() : '';
+  const apiToken = authType === 'token' ? cfApiTokenInput.value.trim() : '';
 
   const creds = {
     name,
     template,
-    accountId: useDefaults ? DEFAULT_ACCOUNT_ID : cfAccountIdInput.value.trim(),
-    apiKey: useDefaults ? DEFAULT_API_KEY : (cfAuthTypeSelect.value === 'key' ? cfApiKeyInput.value.trim() : ''),
-    email: useDefaults ? DEFAULT_EMAIL : (cfAuthTypeSelect.value === 'key' ? cfEmailInput.value.trim() : ''),
-    apiToken: !useDefaults && cfAuthTypeSelect.value === 'token' ? cfApiTokenInput.value.trim() : ''
+    accountId,
+    apiKey,
+    email,
+    apiToken
   };
+
+  // Save to cache
+  saveCachedCredentials(accountId, authType, apiKey, email, apiToken);
 
   const btnSubmit = document.getElementById('btn-submit-create');
   const loader = btnSubmit.querySelector('.btn-loader');
@@ -316,12 +358,18 @@ async function handleFormSubmit(e) {
 
 // Redeploy existing site using saved credentials
 function triggerRedeploy(siteName) {
-  // Use default system configurations to retrigger build
+  const site = sites.find(s => s.name === siteName);
+  if (!site) {
+    alert('Không tìm thấy thông tin website.');
+    return;
+  }
+
   const creds = {
     name: siteName,
-    accountId: DEFAULT_ACCOUNT_ID,
-    apiKey: DEFAULT_API_KEY,
-    email: DEFAULT_EMAIL
+    accountId: site.accountId || '',
+    apiKey: site.apiKey || '',
+    email: site.email || '',
+    apiToken: site.apiToken || ''
   };
 
   fetch('/api/sites', {
@@ -422,15 +470,22 @@ async function executeDeleteSite() {
   btnConfirmDelete.disabled = true;
   btnConfirmDelete.textContent = 'Đang xóa...';
 
+  const site = sites.find(s => s.name === siteToDelete);
+  const accountId = site ? (site.accountId || '') : '';
+  const apiKey = site ? (site.apiKey || '') : '';
+  const email = site ? (site.email || '') : '';
+  const apiToken = site ? (site.apiToken || '') : '';
+
   try {
     const res = await fetch(`/api/sites/${siteToDelete}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         deleteCloudflareResources: deleteCf,
-        accountId: DEFAULT_ACCOUNT_ID,
-        apiKey: DEFAULT_API_KEY,
-        email: DEFAULT_EMAIL
+        accountId,
+        apiKey,
+        email,
+        apiToken
       })
     });
 
@@ -836,6 +891,90 @@ response = requests.post(
 if response.status_code == 201:
     print("Đăng bài thành công:", response.json())
 else:
-    print("Thất bại:", response.status_code, response.text)`;
+      print("Thất bại:", response.status_code, response.text)`;
 }
 
+// ── Cloudflare Site Credentials Editing Logic ─────────────────────────────────
+let activeCredsSiteName = '';
+
+function openCredentialsModal(siteName) {
+  activeCredsSiteName = siteName;
+  document.getElementById('creds-site-name-text').textContent = `Website: ${siteName}`;
+  
+  const siteObj = sites.find(s => s.name === siteName);
+  if (siteObj) {
+    credsAccountIdInput.value = siteObj.accountId || '';
+    if (siteObj.apiToken) {
+      credsAuthTypeSelect.value = 'token';
+      credsApiTokenInput.value = siteObj.apiToken;
+      credsApiKeyInput.value = '';
+      credsEmailInput.value = '';
+    } else {
+      credsAuthTypeSelect.value = 'key';
+      credsApiKeyInput.value = siteObj.apiKey || '';
+      credsEmailInput.value = siteObj.email || '';
+      credsApiTokenInput.value = '';
+    }
+  } else {
+    credsAccountIdInput.value = '';
+    credsAuthTypeSelect.value = 'key';
+    credsApiKeyInput.value = '';
+    credsEmailInput.value = '';
+    credsApiTokenInput.value = '';
+  }
+  
+  toggleEditCredsFields();
+  credentialsModal.classList.add('open');
+}
+window.openCredentialsModal = openCredentialsModal;
+
+function closeCredentialsModal() {
+  activeCredsSiteName = '';
+  credentialsModal.classList.remove('open');
+}
+
+async function handleCredsFormSubmit(e) {
+  e.preventDefault();
+  
+  const siteName = activeCredsSiteName;
+  if (!siteName) return;
+
+  const authType = credsAuthTypeSelect.value;
+  const accountId = credsAccountIdInput.value.trim();
+  const apiKey = authType === 'key' ? credsApiKeyInput.value.trim() : '';
+  const email = authType === 'key' ? credsEmailInput.value.trim() : '';
+  const apiToken = authType === 'token' ? credsApiTokenInput.value.trim() : '';
+
+  const creds = {
+    accountId,
+    apiKey,
+    email,
+    apiToken
+  };
+
+  const btnSubmit = document.getElementById('btn-submit-creds');
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = 'Đang lưu...';
+
+  try {
+    const res = await fetch(`/api/sites/${siteName}/credentials`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(creds)
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      closeCredentialsModal();
+      fetchSites();
+      alert('Đã cập nhật key Cloudflare thành công cho website ' + siteName);
+    } else {
+      alert(`Lỗi: ${data.error}`);
+    }
+  } catch (err) {
+    alert(`Không thể lưu credentials: ${err.message}`);
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = 'Lưu cấu hình';
+  }
+}
