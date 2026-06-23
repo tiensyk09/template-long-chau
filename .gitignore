@@ -16,8 +16,16 @@ out/
 
 # Local databases and configs
 db.json
-.env*
-**/.env*
+.env
+.env.local
+.env.production
+.env.development
+.env.staging
+**/.env
+**/.env.local
+**/.env.production
+**/.env.development
+**/.env.staging
 
 # Logs and scratch space
 logs/
