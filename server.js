@@ -189,7 +189,19 @@ app.get('/api/sites/:name/logs', async (req, res) => {
 
 // 3. Add & Deploy site
 app.post('/api/sites', async (req, res) => {
-  const { name, template, apiKey, email, apiToken, accountId } = req.body;
+  let { name, template, apiKey, email, apiToken, accountId } = req.body;
+
+  // Auto-detect if user entered an API Token (starting with cfut_) in the Global API Key field
+  if (apiKey && apiKey.trim().startsWith('cfut_')) {
+    apiToken = apiKey.trim();
+    apiKey = '';
+    email = '';
+  }
+
+  // Sanitize accountId (remove leading/trailing slashes, spaces)
+  if (accountId) {
+    accountId = accountId.replace(/^\/+|\/+$/g, '').trim();
+  }
 
   if (!name || !/^[a-z0-9-]+$/.test(name)) {
     return res.status(400).json({ error: 'Invalid site name. Use lowercase, numbers, and hyphens only.' });
@@ -457,29 +469,8 @@ bucket_name = "${bucketName}"
 `;
   }
 
-  // Inject credentials as environment variables in Cloudflare production environment
-  wranglerTomlContent += `
-[vars]
-CLOUDFLARE_ACCOUNT_ID = "${creds.accountId || ''}"
-`;
-  if (creds.apiToken) {
-    wranglerTomlContent += `CLOUDFLARE_API_TOKEN = "${creds.apiToken}"\n`;
-  } else {
-    if (creds.apiKey) wranglerTomlContent += `CLOUDFLARE_API_KEY = "${creds.apiKey}"\n`;
-    if (creds.email) wranglerTomlContent += `CLOUDFLARE_EMAIL = "${creds.email}"\n`;
-  }
-
   await fs.writeFile(path.join(sitePath, 'wrangler.toml'), wranglerTomlContent, 'utf8');
 
-  // Also write .env file locally in the site directory so local next.js builds have access
-  let siteEnvContent = `CLOUDFLARE_ACCOUNT_ID=${creds.accountId || ''}\n`;
-  if (creds.apiToken) {
-    siteEnvContent += `CLOUDFLARE_API_TOKEN=${creds.apiToken}\n`;
-  } else {
-    if (creds.apiKey) siteEnvContent += `CLOUDFLARE_API_KEY=${creds.apiKey}\n`;
-    if (creds.email) siteEnvContent += `CLOUDFLARE_EMAIL=${creds.email}\n`;
-  }
-  await fs.writeFile(path.join(sitePath, '.env'), siteEnvContent, 'utf8');
 
   // 7. Build using OpenNext
   await writeLog(siteName, `Building project with OpenNext...\n`);
@@ -684,7 +675,19 @@ app.post('/api/sites/:name/settings', async (req, res) => {
 // POST /api/sites/:name/credentials — Save site credentials to db.json
 app.post('/api/sites/:name/credentials', async (req, res) => {
   const { name } = req.params;
-  const { accountId, apiKey, email, apiToken } = req.body;
+  let { accountId, apiKey, email, apiToken } = req.body;
+
+  // Auto-detect if user entered an API Token (starting with cfut_) in the Global API Key field
+  if (apiKey && apiKey.trim().startsWith('cfut_')) {
+    apiToken = apiKey.trim();
+    apiKey = '';
+    email = '';
+  }
+
+  // Sanitize accountId (remove leading/trailing slashes, spaces)
+  if (accountId) {
+    accountId = accountId.replace(/^\/+|\/+$/g, '').trim();
+  }
 
   const db = await readDb();
   const site = db.sites.find(s => s.name === name);
