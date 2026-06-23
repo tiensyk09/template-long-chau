@@ -309,10 +309,20 @@ async function handleFormSubmit(e) {
   const name = document.getElementById('site-name').value.trim();
   const template = document.getElementById('site-template').value;
   const authType = cfAuthTypeSelect.value;
-  const accountId = cfAccountIdInput.value.trim();
+  
+  // Sanitize accountId (remove leading/trailing slashes, spaces)
+  const rawAccountId = cfAccountIdInput.value.trim();
+  const accountId = rawAccountId.replace(/^\/+|\/+$/g, '').trim();
+  
   const apiKey = authType === 'key' ? cfApiKeyInput.value.trim() : '';
   const email = authType === 'key' ? cfEmailInput.value.trim() : '';
   const apiToken = authType === 'token' ? cfApiTokenInput.value.trim() : '';
+
+  // Validate Google API Key copy-paste error
+  if (authType === 'key' && apiKey.startsWith('AIza')) {
+    alert('Lỗi: Khóa bạn nhập bắt đầu bằng "AIza" - đây là Google API Key (không phải Cloudflare API Key). Vui lòng lấy đúng Global API Key từ Cloudflare Dashboard (My Profile > API Tokens > Global API Key).');
+    return;
+  }
 
   const creds = {
     name,
@@ -940,10 +950,20 @@ async function handleCredsFormSubmit(e) {
   if (!siteName) return;
 
   const authType = credsAuthTypeSelect.value;
-  const accountId = credsAccountIdInput.value.trim();
+  
+  // Sanitize accountId (remove leading/trailing slashes, spaces)
+  const rawAccountId = credsAccountIdInput.value.trim();
+  const accountId = rawAccountId.replace(/^\/+|\/+$/g, '').trim();
+  
   const apiKey = authType === 'key' ? credsApiKeyInput.value.trim() : '';
   const email = authType === 'key' ? credsEmailInput.value.trim() : '';
   const apiToken = authType === 'token' ? credsApiTokenInput.value.trim() : '';
+
+  // Validate Google API Key copy-paste error
+  if (authType === 'key' && apiKey.startsWith('AIza')) {
+    alert('Lỗi: Khóa bạn nhập bắt đầu bằng "AIza" - đây là Google API Key (không phải Cloudflare API Key). Vui lòng lấy đúng Global API Key từ Cloudflare Dashboard (My Profile > API Tokens > Global API Key).');
+    return;
+  }
 
   const creds = {
     accountId,

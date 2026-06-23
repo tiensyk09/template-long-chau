@@ -461,19 +461,24 @@ bucket_name = "${bucketName}"
   wranglerTomlContent += `
 [vars]
 CLOUDFLARE_ACCOUNT_ID = "${creds.accountId || ''}"
-CLOUDFLARE_EMAIL = "${creds.email || ''}"
-CLOUDFLARE_API_KEY = "${creds.apiKey || ''}"
-CLOUDFLARE_API_TOKEN = "${creds.apiToken || ''}"
 `;
+  if (creds.apiToken) {
+    wranglerTomlContent += `CLOUDFLARE_API_TOKEN = "${creds.apiToken}"\n`;
+  } else {
+    if (creds.apiKey) wranglerTomlContent += `CLOUDFLARE_API_KEY = "${creds.apiKey}"\n`;
+    if (creds.email) wranglerTomlContent += `CLOUDFLARE_EMAIL = "${creds.email}"\n`;
+  }
 
   await fs.writeFile(path.join(sitePath, 'wrangler.toml'), wranglerTomlContent, 'utf8');
 
   // Also write .env file locally in the site directory so local next.js builds have access
-  const siteEnvContent = `CLOUDFLARE_ACCOUNT_ID=${creds.accountId || ''}
-CLOUDFLARE_API_KEY=${creds.apiKey || ''}
-CLOUDFLARE_EMAIL=${creds.email || ''}
-CLOUDFLARE_API_TOKEN=${creds.apiToken || ''}
-`;
+  let siteEnvContent = `CLOUDFLARE_ACCOUNT_ID=${creds.accountId || ''}\n`;
+  if (creds.apiToken) {
+    siteEnvContent += `CLOUDFLARE_API_TOKEN=${creds.apiToken}\n`;
+  } else {
+    if (creds.apiKey) siteEnvContent += `CLOUDFLARE_API_KEY=${creds.apiKey}\n`;
+    if (creds.email) siteEnvContent += `CLOUDFLARE_EMAIL=${creds.email}\n`;
+  }
   await fs.writeFile(path.join(sitePath, '.env'), siteEnvContent, 'utf8');
 
   // 7. Build using OpenNext
