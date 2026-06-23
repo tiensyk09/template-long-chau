@@ -742,3 +742,17 @@ button {
   }
 }
 
+/* Columns Layout Grid Styling */
+.grid-columns-layout .col-item {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .grid-columns-layout {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+}
+
+

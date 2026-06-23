@@ -12,7 +12,8 @@ const BLOCK_TYPES = [
   { type: 'pricing', label: '💎 Pricing Tiers', defaultConfigs: { title: 'Simple Pricing', plans: [{ name: 'Free', price: '$0', desc: 'For individuals' }, { name: 'Pro', price: '$19', desc: 'For teams' }] } },
   { type: 'testimonials', label: '💬 Testimonials Grid', defaultConfigs: { tag: '// community', title: 'Loved by engineers and founders', items: [{ quote: '“ Excellent tool, saved me days! ”', author: 'Jane Doe', title: 'CEO at Startup' }] } },
   { type: 'stats', label: '📊 Statistics Cards', defaultConfigs: { items: [{ val: '10x', lbl: 'Faster' }, { val: '2x', lbl: 'Cleaner' }] } },
-  { type: 'html', label: '📝 Custom HTML / Text', defaultConfigs: { html: '<p style="color:#94a3b8;">Enter custom HTML or plain text here...</p>' } }
+  { type: 'html', label: '📝 Custom HTML / Text', defaultConfigs: { html: '<p style="color:#94a3b8;">Enter custom HTML or plain text here...</p>' } },
+  { type: 'columns', label: '📊 Columns Layout', defaultConfigs: { layout: '2_equal', col1Html: '<div><h3>Column 1</h3><p>Enter text or HTML here...</p></div>', col2Html: '<div><h3>Column 2</h3><p>Enter text or HTML here...</p></div>' } }
 ];
 
 export default function PageBuilder({ initialBlocks = [], onSave, saving = false }) {
@@ -618,6 +619,48 @@ export default function PageBuilder({ initialBlocks = [], onSave, saving = false
                             />
                             <p style={{ fontSize: '10px', color: 'var(--admin-muted)', marginTop: '4px' }}>Supports raw HTML markup (divs, headings, styling classes).</p>
                           </div>
+                        )}
+
+                        {/* Columns Block Config */}
+                        {block.type === 'columns' && (
+                          <>
+                            <div className="builder-field">
+                              <label className="builder-field-label">Layout Column Style</label>
+                              <select
+                                value={block.configs.layout || '2_equal'}
+                                onChange={e => handleUpdateConfig(block.id, 'layout', e.target.value)}
+                                className="adm-input"
+                                style={{ background: '#0a0a0a', color: '#fff' }}
+                              >
+                                <option value="1_col">1 Column (Full Width)</option>
+                                <option value="2_equal">2 Columns (Equal Width)</option>
+                                <option value="2_left_sidebar">2 Columns (Left Sidebar 30% / 70%)</option>
+                                <option value="2_right_sidebar">2 Columns (Right Sidebar 70% / 30%)</option>
+                              </select>
+                            </div>
+                            <div className="builder-field-row">
+                              <div className="builder-field">
+                                <label className="builder-field-label">Column 1 Content (HTML / Text)</label>
+                                <textarea
+                                  value={block.configs.col1Html || ''}
+                                  onChange={e => handleUpdateConfig(block.id, 'col1Html', e.target.value)}
+                                  className="adm-textarea"
+                                  style={{ height: '150px', fontFamily: 'var(--admin-mono-font)', fontSize: '12px' }}
+                                />
+                              </div>
+                              {block.configs.layout !== '1_col' && (
+                                <div className="builder-field">
+                                  <label className="builder-field-label">Column 2 Content (HTML / Text)</label>
+                                  <textarea
+                                    value={block.configs.col2Html || ''}
+                                    onChange={e => handleUpdateConfig(block.id, 'col2Html', e.target.value)}
+                                    className="adm-textarea"
+                                    style={{ height: '150px', fontFamily: 'var(--admin-mono-font)', fontSize: '12px' }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
                     )}
