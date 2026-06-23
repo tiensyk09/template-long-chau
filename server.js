@@ -4,9 +4,7 @@ import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
-import dotenv from 'dotenv';
 
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
