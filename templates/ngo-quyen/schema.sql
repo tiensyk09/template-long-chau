@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT NOT NULL PRIMARY KEY,
   name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
   sort_order INTEGER DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -110,18 +112,18 @@ CREATE TABLE IF NOT EXISTS settings (
 
 
 -- Seed categories
-INSERT OR IGNORE INTO categories (id, name, sort_order) VALUES
-  ('hoat-dong-dang-uy', 'Tin tức - Sự kiện', 1),
-  ('chi-dao-dieu-hanh', 'Thông báo nhà trường', 2),
-  ('chinh-quyen-nha-nuoc', 'Hoạt động chuyên môn', 3),
-  ('mat-tran-doan-the', 'Phong trào Đoàn - Đội', 4),
-  ('cai-cach-hanh-chinh', 'Tuyển sinh đầu cấp', 5),
-  ('chuyen-doi-so', 'Ứng dụng CNTT - Chuyển đổi số', 6),
-  ('van-hoa-xa-hoi', 'Góc Phụ huynh', 7),
-  ('kinh-te-moi-truong', 'Tài nguyên học tập', 8),
-  ('lich-lam-viec', 'Lịch công tác tuần', 9),
-  ('an-ninh-quoc-phong', 'Gương sáng học sinh', 10),
-  ('thong-bao', 'Thông báo chung', 11);
+INSERT OR IGNORE INTO categories (id, name, slug, sort_order, active) VALUES
+  ('hoat-dong-dang-uy', 'Tin tức - Sự kiện', 'hoat-dong-dang-uy', 1, 1),
+  ('chi-dao-dieu-hanh', 'Thông báo nhà trường', 'chi-dao-dieu-hanh', 2, 1),
+  ('chinh-quyen-nha-nuoc', 'Hoạt động chuyên môn', 'chinh-quyen-nha-nuoc', 3, 1),
+  ('mat-tran-doan-the', 'Phong trào Đoàn - Đội', 'mat-tran-doan-the', 4, 1),
+  ('cai-cach-hanh-chinh', 'Tuyển sinh đầu cấp', 'cai-cach-hanh-chinh', 5, 1),
+  ('chuyen-doi-so', 'Ứng dụng CNTT - Chuyển đổi số', 'chuyen-doi-so', 6, 1),
+  ('van-hoa-xa-hoi', 'Góc Phụ huynh', 'van-hoa-xa-hoi', 7, 1),
+  ('kinh-te-moi-truong', 'Tài nguyên học tập', 'kinh-te-moi-truong', 8, 1),
+  ('lich-lam-viec', 'Lịch công tác tuần', 'lich-lam-viec', 9, 1),
+  ('an-ninh-quoc-phong', 'Gương sáng học sinh', 'an-ninh-quoc-phong', 10, 1),
+  ('thong-bao', 'Thông báo chung', 'thong-bao', 11, 1);
 
 -- Seed banners
 INSERT OR IGNORE INTO banners (id, title, caption, big_text, image_url, link, bg_color, active, sort_order) VALUES
