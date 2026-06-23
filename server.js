@@ -200,17 +200,31 @@ app.post('/api/sites', async (req, res) => {
       databaseId: '',
       databaseName: `${name}-db`,
       bucketName: `${name}-bucket`,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      accountId: accountId || '',
+      apiKey: apiKey || '',
+      email: email || '',
+      apiToken: apiToken || ''
     };
     db.sites.push(site);
   } else {
     site.status = 'deploying';
     site.template = chosenTemplate;
+    site.accountId = accountId || site.accountId || '';
+    site.apiKey = apiKey || site.apiKey || '';
+    site.email = email || site.email || '';
+    site.apiToken = apiToken || site.apiToken || '';
   }
   await writeDb(db);
 
   // Start background deploy task
-  deploySite(name, { template: chosenTemplate, apiKey, email, apiToken, accountId }).catch(async (err) => {
+  deploySite(name, {
+    template: chosenTemplate,
+    apiKey: site.apiKey || apiKey || DEFAULT_API_KEY,
+    email: site.email || email || DEFAULT_EMAIL,
+    apiToken: site.apiToken || apiToken || '',
+    accountId: site.accountId || accountId || DEFAULT_ACCOUNT_ID
+  }).catch(async (err) => {
     await writeLog(name, `\nDEPLOYMENT FAILED: ${err.message}\n`, true);
     const currentDb = await readDb();
     const s = currentDb.sites.find(item => item.name === name);
@@ -238,7 +252,13 @@ app.delete('/api/sites/:name', async (req, res) => {
 
   // Perform Cloudflare deletion in background if requested
   if (deleteCloudflareResources) {
-    deleteResourcesFromCloudflare(site, { apiKey, email, apiToken, accountId }).catch((err) => {
+    const resolvedCreds = {
+      apiKey: apiKey || site.apiKey || DEFAULT_API_KEY,
+      email: email || site.email || DEFAULT_EMAIL,
+      apiToken: apiToken || site.apiToken || '',
+      accountId: accountId || site.accountId || DEFAULT_ACCOUNT_ID
+    };
+    deleteResourcesFromCloudflare(site, resolvedCreds).catch((err) => {
       console.error(`Failed to delete Cloudflare resources for ${name}:`, err);
     });
   }
@@ -431,7 +451,25 @@ binding = "R2_BUCKET"
 bucket_name = "${bucketName}"
 `;
   }
+
+  // Inject credentials as environment variables in Cloudflare production environment
+  wranglerTomlContent += `
+[vars]
+CLOUDFLARE_ACCOUNT_ID = "${creds.accountId || ''}"
+CLOUDFLARE_EMAIL = "${creds.email || ''}"
+CLOUDFLARE_API_KEY = "${creds.apiKey || ''}"
+CLOUDFLARE_API_TOKEN = "${creds.apiToken || ''}"
+`;
+
   await fs.writeFile(path.join(sitePath, 'wrangler.toml'), wranglerTomlContent, 'utf8');
+
+  // Also write .env file locally in the site directory so local next.js builds have access
+  const siteEnvContent = `CLOUDFLARE_ACCOUNT_ID=${creds.accountId || ''}
+CLOUDFLARE_API_KEY=${creds.apiKey || ''}
+CLOUDFLARE_EMAIL=${creds.email || ''}
+CLOUDFLARE_API_TOKEN=${creds.apiToken || ''}
+`;
+  await fs.writeFile(path.join(sitePath, '.env'), siteEnvContent, 'utf8');
 
   // 7. Build using OpenNext
   await writeLog(siteName, `Building project with OpenNext...\n`);
@@ -517,9 +555,10 @@ app.get('/api/sites/:name/settings', async (req, res) => {
   const envOptions = {
     env: {
       ...process.env,
-      CLOUDFLARE_API_KEY: DEFAULT_API_KEY,
-      CLOUDFLARE_EMAIL: DEFAULT_EMAIL,
-      CLOUDFLARE_ACCOUNT_ID: DEFAULT_ACCOUNT_ID
+      CLOUDFLARE_API_KEY: site.apiKey || DEFAULT_API_KEY,
+      CLOUDFLARE_EMAIL: site.email || DEFAULT_EMAIL,
+      CLOUDFLARE_ACCOUNT_ID: site.accountId || DEFAULT_ACCOUNT_ID,
+      CLOUDFLARE_API_TOKEN: site.apiToken || ''
     }
   };
 
@@ -592,9 +631,10 @@ app.post('/api/sites/:name/settings', async (req, res) => {
   const envOptions = {
     env: {
       ...process.env,
-      CLOUDFLARE_API_KEY: DEFAULT_API_KEY,
-      CLOUDFLARE_EMAIL: DEFAULT_EMAIL,
-      CLOUDFLARE_ACCOUNT_ID: DEFAULT_ACCOUNT_ID
+      CLOUDFLARE_API_KEY: site.apiKey || DEFAULT_API_KEY,
+      CLOUDFLARE_EMAIL: site.email || DEFAULT_EMAIL,
+      CLOUDFLARE_ACCOUNT_ID: site.accountId || DEFAULT_ACCOUNT_ID,
+      CLOUDFLARE_API_TOKEN: site.apiToken || ''
     }
   };
 
@@ -655,9 +695,10 @@ app.get('/api/sites/:name/api-keys', async (req, res) => {
   const envOptions = {
     env: {
       ...process.env,
-      CLOUDFLARE_API_KEY: DEFAULT_API_KEY,
-      CLOUDFLARE_EMAIL: DEFAULT_EMAIL,
-      CLOUDFLARE_ACCOUNT_ID: DEFAULT_ACCOUNT_ID
+      CLOUDFLARE_API_KEY: site.apiKey || DEFAULT_API_KEY,
+      CLOUDFLARE_EMAIL: site.email || DEFAULT_EMAIL,
+      CLOUDFLARE_ACCOUNT_ID: site.accountId || DEFAULT_ACCOUNT_ID,
+      CLOUDFLARE_API_TOKEN: site.apiToken || ''
     }
   };
 
@@ -708,9 +749,10 @@ app.post('/api/sites/:name/api-keys', async (req, res) => {
   const envOptions = {
     env: {
       ...process.env,
-      CLOUDFLARE_API_KEY: DEFAULT_API_KEY,
-      CLOUDFLARE_EMAIL: DEFAULT_EMAIL,
-      CLOUDFLARE_ACCOUNT_ID: DEFAULT_ACCOUNT_ID
+      CLOUDFLARE_API_KEY: site.apiKey || DEFAULT_API_KEY,
+      CLOUDFLARE_EMAIL: site.email || DEFAULT_EMAIL,
+      CLOUDFLARE_ACCOUNT_ID: site.accountId || DEFAULT_ACCOUNT_ID,
+      CLOUDFLARE_API_TOKEN: site.apiToken || ''
     }
   };
 
@@ -785,9 +827,10 @@ app.delete('/api/sites/:name/api-keys/:id', async (req, res) => {
   const envOptions = {
     env: {
       ...process.env,
-      CLOUDFLARE_API_KEY: DEFAULT_API_KEY,
-      CLOUDFLARE_EMAIL: DEFAULT_EMAIL,
-      CLOUDFLARE_ACCOUNT_ID: DEFAULT_ACCOUNT_ID
+      CLOUDFLARE_API_KEY: site.apiKey || DEFAULT_API_KEY,
+      CLOUDFLARE_EMAIL: site.email || DEFAULT_EMAIL,
+      CLOUDFLARE_ACCOUNT_ID: site.accountId || DEFAULT_ACCOUNT_ID,
+      CLOUDFLARE_API_TOKEN: site.apiToken || ''
     }
   };
 
