@@ -1,0 +1,13 @@
+name = "test-ngo-quyen-site"
+main = ".open-next/worker.js"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "test-ngo-quyen-site-db"
+database_id = "65ed3d8b-3891-4716-a073-0954e3ee1d68"

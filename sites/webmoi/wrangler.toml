@@ -1,0 +1,13 @@
+name = "webmoi"
+main = ".open-next/worker.js"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "webmoi-db"
+database_id = "383bfcb0-3708-485c-b93c-5b1d953c5f1b"

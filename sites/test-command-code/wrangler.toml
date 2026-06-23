@@ -1,0 +1,13 @@
+name = "test-command-code"
+main = ".open-next/worker.js"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "test-command-code-db"
+database_id = "a47e0ad7-c9c0-4320-9dcd-f89fcf6ae28d"
