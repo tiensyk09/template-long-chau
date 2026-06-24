@@ -598,7 +598,6 @@ async function deploySite(siteName, creds) {
   // ─── STEP 6: Viết wrangler.toml ──────────────────────────────────────────
   await writeLog(siteName, `[CONFIG] Tạo wrangler.toml cho Cloudflare Pages...\n`);
   let wranglerTomlContent = `name = "${siteName}"
-main = ".open-next/worker.js"
 compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".open-next/assets"
