@@ -601,11 +601,15 @@ async function deploySite(siteName, creds) {
   }
 
   // ─── STEP 6: Viết wrangler.toml ──────────────────────────────────────────
-  await writeLog(siteName, `[CONFIG] Tạo wrangler.toml cho Cloudflare Pages...\n`);
+  await writeLog(siteName, `[CONFIG] Tạo wrangler.toml cho Cloudflare Workers...\n`);
   let wranglerTomlContent = `name = "${siteName}"
+main = ".open-next/worker.js"
 compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = ".open-next/assets"
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
 
 [[d1_databases]]
 binding = "DB"
@@ -632,68 +636,25 @@ bucket_name = "${bucketName}"
   }
   await writeLog(siteName, `[BUILD] Build hoàn tất!\n`);
 
-  // ─── STEP 7.2: Copy worker.js sang assets/_worker.js để Pages nhận diện ──
-  await writeLog(siteName, `[CONFIG] Cấu hình _worker.js cho Cloudflare Pages...\n`);
-  const workerSrc = path.join(sitePath, '.open-next', 'worker.js');
-  const workerDest = path.join(sitePath, '.open-next', 'assets', '_worker.js');
+  // ─── STEP 8: Deploy lên Cloudflare Workers ───────────────────────────────
+  await writeLog(siteName, `[DEPLOY] Deploying lên Cloudflare Workers...\n`);
   try {
-    await fs.copyFile(workerSrc, workerDest);
-    await writeLog(siteName, `[CONFIG] Đã cấu hình _worker.js thành công.\n`);
-  } catch (copyErr) {
-    throw new Error(`Không thể cấu hình _worker.js cho Pages: ${copyErr.message}`);
-  }
-
-  // ─── STEP 7.5: Tạo Cloudflare Pages project nếu chưa có ──────────────────
-  await writeLog(siteName, `[DEPLOY] Kiểm tra/Tạo Cloudflare Pages project "${siteName}"...\n`);
-  try {
-    await runCommand('npx', ['wrangler', 'pages', 'project', 'create', siteName,
-      '--production-branch', 'main'
-    ], envOptions, siteName);
+    await runCommand('npx', ['wrangler', 'deploy'], envOptions, siteName);
   } catch (err) {
-    const output = (err.output || err.message || '').toLowerCase();
-    if (output.includes('already exists') || output.includes('project_already_exists') || output.includes('8000007')) {
-      await writeLog(siteName, `[DEPLOY] Project Pages đã tồn tại hoặc đã được tạo.\n`);
-    } else {
-      const reason = analyzeError(err, 'pages project create');
-      throw new Error(reason || `Không thể tạo project Pages: ${err.message}`);
-    }
-  }
-
-  // ─── STEP 8: Bind D1 + R2 vào Pages project qua CF REST API ─────────────
-  await writeLog(siteName, `[BIND] Gắn D1/R2 bindings vào Cloudflare Pages project...\n`);
-  try {
-    await bindPagesResources(siteName, dbId, dbName, bucketName, hasR2, creds);
-    await writeLog(siteName, `[BIND] Bindings đã được cấu hình thành công.\n`);
-  } catch (bindErr) {
-    await writeLog(siteName, `[BIND] CẢNH BÁO: Không thể bind tự động: ${bindErr.message}\nBạn có thể cấu hình thủ công trong CF Dashboard → Pages → ${siteName} → Settings → Functions.\n`);
-  }
-
-  // ─── STEP 9: Deploy lên Cloudflare Pages (Direct Upload) ─────────────────
-  await writeLog(siteName, `[DEPLOY] Uploading lên Cloudflare Pages...\n`);
-  // Dùng wrangler pages deploy để upload trực tiếp (không cần Git integration)
-  try {
-    await runCommand('npx', ['wrangler', 'pages', 'deploy', '.open-next/assets',
-      '--project-name', siteName,
-      '--branch', 'main',
-      '--commit-dirty', 'true'
-    ], envOptions, siteName);
-  } catch (err) {
-    const reason = analyzeError(err, 'pages deploy');
+    const reason = analyzeError(err, 'wrangler deploy');
     throw new Error(reason || `Deploy thất bại: ${err.message}`);
   }
 
-  // ─── STEP 10: Extract deploy URL ─────────────────────────────────────────
+  // ─── STEP 9: Extract deploy URL ─────────────────────────────────────────
   const deployLogs = await fs.readFile(logFilePath, 'utf8');
-  // CF Pages URL pattern
-  const pagesUrlMatch = deployLogs.match(/https:\/\/[a-zA-Z0-9-]+\.pages\.dev/);
   const workerUrlMatch = deployLogs.match(/https:\/\/[a-zA-Z0-9.-]+\.workers\.dev/);
-  const deployUrl = pagesUrlMatch?.[0] || workerUrlMatch?.[0] || `https://${siteName}.pages.dev`;
+  const deployUrl = workerUrlMatch?.[0] || `https://${siteName}.workers.dev`;
 
-  // ─── STEP 11: Chờ deploy ổn định ──────────────────────────────────────────
+  // ─── STEP 10: Chờ deploy ổn định ──────────────────────────────────────────
   await writeLog(siteName, `[DEPLOY] Chờ 15 giây để đường dẫn deployment hoạt động...\n`);
   await new Promise(r => setTimeout(r, 15000));
 
-  // ─── STEP 12: Seed database ───────────────────────────────────────────────
+  // ─── STEP 11: Seed database ───────────────────────────────────────────────
   await writeLog(siteName, `[SEED] Khởi tạo dữ liệu admin trong D1...\n`);
   let seedSuccess = false;
   for (let attempt = 1; attempt <= 5; attempt++) {
@@ -730,7 +691,7 @@ bucket_name = "${bucketName}"
     siteEntry.deployUrl = deployUrl;
     siteEntry.databaseId = dbId;
     siteEntry.bucketName = bucketName;
-    siteEntry.deployType = 'pages';
+    siteEntry.deployType = 'worker';
     await writeDb(currentDb);
   }
 
