@@ -88,36 +88,115 @@ async function writeLog(siteName, text, isError = false) {
 }
 
 // Helper to execute processes with real-time log capture
+// Returns combined stdout+stderr output; throws Error with .output attached on failure
 function runCommand(command, args, options, siteName) {
   return new Promise((resolve, reject) => {
     writeLog(siteName, `Running: ${command} ${args.join(' ')}\n`);
-    
+
     const child = spawn(command, args, {
       ...options,
       shell: true
     });
 
+    let combinedOutput = '';
+
     child.stdout.on('data', (data) => {
-      writeLog(siteName, data.toString());
+      const text = data.toString();
+      combinedOutput += text;
+      writeLog(siteName, text);
     });
 
     child.stderr.on('data', (data) => {
-      writeLog(siteName, data.toString());
+      const text = data.toString();
+      combinedOutput += text;
+      writeLog(siteName, text);
     });
 
     child.on('close', (code) => {
       if (code === 0) {
-        resolve();
+        resolve(combinedOutput);
       } else {
-        reject(new Error(`Command "${command} ${args.join(' ')}" failed with exit code ${code}`));
+        const err = new Error(`Command "${command} ${args.join(' ')}" failed with exit code ${code}`);
+        err.output = combinedOutput;
+        reject(err);
       }
     });
 
     child.on('error', (err) => {
+      err.output = combinedOutput;
       reject(err);
     });
   });
 }
+
+// ============================================================
+// Phân tích nguyên nhân lỗi từ output của wrangler/git/npm
+// Trả về mô tả tiếng Việt dễ hiểu
+// ============================================================
+function analyzeError(err, context = '') {
+  const output = (err.output || err.message || '').toLowerCase();
+
+  // D1 Database limit
+  if (output.includes('maximum number of d1') || output.includes('reached the maximum') && output.includes('d1')) {
+    return '❌ Đã đạt giới hạn D1 databases trên tài khoản Cloudflare (free plan tối đa 10 DB). Hãy xóa bớt database không dùng trong Cloudflare Dashboard → D1 trước khi tạo website mới.';
+  }
+
+  // R2 not enabled
+  if (output.includes('please enable r2') || output.includes('10042')) {
+    return '⚠️ R2 Storage chưa được bật trên tài khoản này. Vào Cloudflare Dashboard → R2 để kích hoạt.';
+  }
+
+  // Auth errors
+  if (output.includes('authentication') || output.includes('unauthorized') || output.includes('10000') || output.includes('invalid api token') || output.includes('authenticationerror')) {
+    return '❌ Lỗi xác thực Cloudflare API. Kiểm tra lại API Token / Global API Key đã nhập trong Cấu hình CF.';
+  }
+
+  // Account ID wrong
+  if (output.includes('account_id') || output.includes('could not find account')) {
+    return '❌ Account ID Cloudflare không hợp lệ. Kiểm tra lại Account ID trong Cấu hình CF.';
+  }
+
+  // Pages project name conflict
+  if (output.includes('already exists') && (output.includes('pages') || output.includes('project'))) {
+    return '⚠️ Tên website đã tồn tại trên Cloudflare Pages. Chọn tên khác hoặc xóa project cũ trên CF Dashboard trước.';
+  }
+
+  // Worker name conflict
+  if (output.includes('already exists') && output.includes('worker')) {
+    return '⚠️ Tên Worker đã tồn tại. Chọn tên khác hoặc xóa Worker cũ trên CF Dashboard.';
+  }
+
+  // D1 DB already exists (not an error, just info)
+  if (output.includes('already exists') && output.includes('d1')) {
+    return '⚠️ D1 database đã tồn tại, sẽ dùng lại database cũ.';
+  }
+
+  // Git clone failure
+  if (output.includes('git') && (output.includes('clone') || output.includes('repository')) && (output.includes('failed') || output.includes('error'))) {
+    return '❌ Không thể clone template từ GitHub. Kiểm tra kết nối internet hoặc repo URL.';
+  }
+
+  // npm install failure
+  if ((context.includes('npm') || output.includes('npm warn') || output.includes('npm error')) && output.includes('err!')) {
+    return '❌ Lỗi cài đặt dependencies (npm install thất bại). Kiểm tra kết nối mạng.';
+  }
+
+  // Build failure
+  if (output.includes('opennext') || output.includes('build:cf')) {
+    if (output.includes('error') || output.includes('failed')) {
+      return '❌ Build Next.js thất bại. Xem chi tiết log phía trên để biết nguyên nhân cụ thể.';
+    }
+  }
+
+  // Wrangler deploy failure
+  if (output.includes('wrangler') && output.includes('deploy') && output.includes('error')) {
+    return '❌ Deploy lên Cloudflare thất bại. Kiểm tra API credentials và thử lại.';
+  }
+
+  // Generic - no match
+  return null;
+}
+
 
 // Deep copy folder recursively, ignoring build/node_modules directories
 async function copyDir(src, dest) {
@@ -457,6 +536,12 @@ async function deploySite(siteName, creds) {
     const match = currentLogs.match(/database_id\s*=\s*"([^"]+)"/);
     if (match) dbId = match[1];
   } catch (err) {
+    // Kiểm tra nguyên nhân cụ thể trước khi chuyển sang tìm DB hiện có
+    const reason = analyzeError(err, 'd1 create');
+    if (reason && reason.includes('giới hạn')) {
+      // Đây là lỗi limit - dừng ngay, không cần tìm tiếp
+      throw new Error(reason);
+    }
     await writeLog(siteName, `[D1] Lỗi tạo DB (có thể đã tồn tại). Tìm kiếm trong danh sách...\n`);
   }
 
@@ -508,10 +593,6 @@ compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".open-next/assets"
 
-[assets]
-directory = ".open-next/assets"
-binding = "ASSETS"
-
 [[d1_databases]]
 binding = "DB"
 database_name = "${dbName}"
@@ -529,17 +610,27 @@ bucket_name = "${bucketName}"
   // ─── STEP 7: Build với OpenNext ───────────────────────────────────────────
   await writeLog(siteName, `[BUILD] Build project với OpenNext (opennextjs-cloudflare)...\n`);
   await writeLog(siteName, `[BUILD] Quá trình này có thể mất 3–5 phút, vui lòng chờ...\n`);
-  await runCommand('npm', ['run', 'build:cf'], envOptions, siteName);
+  try {
+    await runCommand('npm', ['run', 'build:cf'], envOptions, siteName);
+  } catch (err) {
+    const reason = analyzeError(err, 'build:cf');
+    throw new Error(reason || `Build thất bại: ${err.message}`);
+  }
   await writeLog(siteName, `[BUILD] Build hoàn tất!\n`);
 
   // ─── STEP 8: Deploy lên Cloudflare Pages (Direct Upload) ─────────────────
   await writeLog(siteName, `[DEPLOY] Uploading lên Cloudflare Pages...\n`);
   // Dùng wrangler pages deploy để upload trực tiếp (không cần Git integration)
-  await runCommand('npx', ['wrangler', 'pages', 'deploy', '.open-next/assets',
-    '--project-name', siteName,
-    '--branch', 'main',
-    '--commit-dirty', 'true'
-  ], envOptions, siteName);
+  try {
+    await runCommand('npx', ['wrangler', 'pages', 'deploy', '.open-next/assets',
+      '--project-name', siteName,
+      '--branch', 'main',
+      '--commit-dirty', 'true'
+    ], envOptions, siteName);
+  } catch (err) {
+    const reason = analyzeError(err, 'pages deploy');
+    throw new Error(reason || `Deploy thất bại: ${err.message}`);
+  }
 
   // ─── STEP 9: Bind D1 + R2 vào Pages project qua CF REST API ─────────────
   await writeLog(siteName, `[BIND] Gắn D1/R2 bindings vào Cloudflare Pages project...\n`);
