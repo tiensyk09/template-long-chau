@@ -632,6 +632,17 @@ bucket_name = "${bucketName}"
   }
   await writeLog(siteName, `[BUILD] Build hoàn tất!\n`);
 
+  // ─── STEP 7.2: Copy worker.js sang assets/_worker.js để Pages nhận diện ──
+  await writeLog(siteName, `[CONFIG] Cấu hình _worker.js cho Cloudflare Pages...\n`);
+  const workerSrc = path.join(sitePath, '.open-next', 'worker.js');
+  const workerDest = path.join(sitePath, '.open-next', 'assets', '_worker.js');
+  try {
+    await fs.copyFile(workerSrc, workerDest);
+    await writeLog(siteName, `[CONFIG] Đã cấu hình _worker.js thành công.\n`);
+  } catch (copyErr) {
+    throw new Error(`Không thể cấu hình _worker.js cho Pages: ${copyErr.message}`);
+  }
+
   // ─── STEP 7.5: Tạo Cloudflare Pages project nếu chưa có ──────────────────
   await writeLog(siteName, `[DEPLOY] Kiểm tra/Tạo Cloudflare Pages project "${siteName}"...\n`);
   try {
