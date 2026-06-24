@@ -467,7 +467,7 @@ async function deleteResourcesFromCloudflare(site, creds) {
   if (site.bucketName) {
     try {
       console.log(`Deleting R2 bucket ${site.bucketName}`);
-      await runCommand('npx', ['wrangler', 'r2', 'bucket', 'delete', site.bucketName, '--force'], envOptions, site.name);
+      await runCommand('npx', ['wrangler', 'r2', 'bucket', 'delete', site.bucketName], envOptions, site.name);
     } catch (e) {
       console.error(`R2 deletion failed:`, e);
     }
@@ -484,7 +484,7 @@ async function deleteResourcesFromCloudflare(site, creds) {
   } else {
     try {
       console.log(`Deleting Worker project ${site.name}`);
-      await runCommand('npx', ['wrangler', 'delete', '--name', site.name, '--skip-confirmation'], envOptions, site.name);
+      await runCommand('npx', ['wrangler', 'delete', site.name], envOptions, site.name);
     } catch (e) {
       console.error(`Worker deletion failed:`, e);
     }
@@ -648,7 +648,16 @@ bucket_name = "${bucketName}"
     }
   }
 
-  // ─── STEP 8: Deploy lên Cloudflare Pages (Direct Upload) ─────────────────
+  // ─── STEP 8: Bind D1 + R2 vào Pages project qua CF REST API ─────────────
+  await writeLog(siteName, `[BIND] Gắn D1/R2 bindings vào Cloudflare Pages project...\n`);
+  try {
+    await bindPagesResources(siteName, dbId, dbName, bucketName, hasR2, creds);
+    await writeLog(siteName, `[BIND] Bindings đã được cấu hình thành công.\n`);
+  } catch (bindErr) {
+    await writeLog(siteName, `[BIND] CẢNH BÁO: Không thể bind tự động: ${bindErr.message}\nBạn có thể cấu hình thủ công trong CF Dashboard → Pages → ${siteName} → Settings → Functions.\n`);
+  }
+
+  // ─── STEP 9: Deploy lên Cloudflare Pages (Direct Upload) ─────────────────
   await writeLog(siteName, `[DEPLOY] Uploading lên Cloudflare Pages...\n`);
   // Dùng wrangler pages deploy để upload trực tiếp (không cần Git integration)
   try {
@@ -662,15 +671,6 @@ bucket_name = "${bucketName}"
     throw new Error(reason || `Deploy thất bại: ${err.message}`);
   }
 
-  // ─── STEP 9: Bind D1 + R2 vào Pages project qua CF REST API ─────────────
-  await writeLog(siteName, `[BIND] Gắn D1/R2 bindings vào Cloudflare Pages project...\n`);
-  try {
-    await bindPagesResources(siteName, dbId, dbName, bucketName, hasR2, creds);
-    await writeLog(siteName, `[BIND] Bindings đã được cấu hình thành công.\n`);
-  } catch (bindErr) {
-    await writeLog(siteName, `[BIND] CẢNH BÁO: Không thể bind tự động: ${bindErr.message}\nBạn có thể cấu hình thủ công trong CF Dashboard → Pages → ${siteName} → Settings → Functions.\n`);
-  }
-
   // ─── STEP 10: Extract deploy URL ─────────────────────────────────────────
   const deployLogs = await fs.readFile(logFilePath, 'utf8');
   // CF Pages URL pattern
@@ -678,18 +678,9 @@ bucket_name = "${bucketName}"
   const workerUrlMatch = deployLogs.match(/https:\/\/[a-zA-Z0-9.-]+\.workers\.dev/);
   const deployUrl = pagesUrlMatch?.[0] || workerUrlMatch?.[0] || `https://${siteName}.pages.dev`;
 
-  // ─── STEP 11: Trigger redeploy để áp dụng bindings ──────────────────────
-  await writeLog(siteName, `[DEPLOY] Kích hoạt redeploy để áp dụng bindings D1/R2...\n`);
-  try {
-    await triggerPagesRedeploy(siteName, creds);
-    await writeLog(siteName, `[DEPLOY] Redeploy đã được kích hoạt. Chờ CF build xong (~2 phút)...\n`);
-    // Chờ 120 giây để CF build
-    await new Promise(r => setTimeout(r, 120000));
-  } catch (redeployErr) {
-    await writeLog(siteName, `[DEPLOY] Không thể trigger redeploy tự động: ${redeployErr.message}\nBindings sẽ có hiệu lực ở lần deploy tiếp theo.\n`);
-    // Chờ 60 giây để deploy đầu tiên xong
-    await new Promise(r => setTimeout(r, 60000));
-  }
+  // ─── STEP 11: Chờ deploy ổn định ──────────────────────────────────────────
+  await writeLog(siteName, `[DEPLOY] Chờ 15 giây để đường dẫn deployment hoạt động...\n`);
+  await new Promise(r => setTimeout(r, 15000));
 
   // ─── STEP 12: Seed database ───────────────────────────────────────────────
   await writeLog(siteName, `[SEED] Khởi tạo dữ liệu admin trong D1...\n`);
