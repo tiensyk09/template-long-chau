@@ -1,0 +1,10 @@
+{
+  "ignore": [
+    "sites/*",
+    "logs/*",
+    "db.json",
+    "templates/*",
+    "scratch/*",
+    ".git/*"
+  ]
+}
