@@ -276,6 +276,11 @@ function createSiteCard(site) {
     'korean-news': '📰 Korean News'
   }[site.template] || site.template || '—';
 
+  // Deploy type badge
+  const deployTypeBadge = site.deployType === 'pages'
+    ? `<span class="deploy-type-badge pages">📄 CF Pages</span>`
+    : `<span class="deploy-type-badge workers">⚡ CF Workers</span>`;
+
   const createdAt = site.createdAt
     ? new Date(site.createdAt).toLocaleString('vi-VN')
     : '—';
@@ -292,7 +297,10 @@ function createSiteCard(site) {
       <div class="site-name-block">
         <div class="site-name">${displayTitle}</div>
         ${showSubName}
-        <span class="site-template-badge" style="margin-top: 4px;">${templateLabel}</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+          <span class="site-template-badge">${templateLabel}</span>
+          ${deployTypeBadge}
+        </div>
       </div>
       <span class="site-status-badge ${statusClass}">${statusLabel}</span>
     </div>
@@ -317,6 +325,7 @@ function createSiteCard(site) {
   `;
   return el;
 }
+
 
 // ============================================================
 // CF PROFILES

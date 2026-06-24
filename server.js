@@ -18,6 +18,22 @@ const LOGS_DIR = path.join(process.cwd(), 'logs');
 const SITES_DIR = path.join(process.cwd(), 'sites');
 const TEMPLATE_DIR = path.join(process.cwd(), 'templates', 'ngo-quyen');
 
+// ============================================================
+// TEMPLATE → GitHub Repo mapping
+// ============================================================
+const TEMPLATE_REPOS = {
+  'ngo-quyen':   'https://github.com/tiensyk09/template-ngo-quyen.git',
+  'korean-news': 'https://github.com/tiensyk09/template-korean-news.git',
+  'commandcode': 'https://github.com/tiensyk09/template-commandcode.git',
+};
+
+// Local fallback nếu git clone thất bại
+const TEMPLATE_LOCAL = {
+  'ngo-quyen':   path.join(process.cwd(), 'templates', 'ngo-quyen'),
+  'korean-news': path.join(process.cwd(), 'templates', 'korean-news'),
+  'commandcode': path.join(process.cwd(), 'templates', 'commandcode'),
+};
+
 // Helper to construct environment variables for Cloudflare commands cleanly, preventing header conflicts
 function getCloudflareEnv(creds) {
   const env = { ...process.env };
@@ -363,16 +379,27 @@ async function deleteResourcesFromCloudflare(site, creds) {
     }
   }
 
-  // Delete Worker Project
-  try {
-    console.log(`Deleting Worker project ${site.name}`);
-    await runCommand('npx', ['wrangler', 'delete', '--name', site.name, '--skip-confirmation'], envOptions, site.name);
-  } catch (e) {
-    console.error(`Worker deletion failed:`, e);
+  // Delete Pages project or Worker project
+  if (site.deployType === 'pages') {
+    try {
+      console.log(`Deleting Pages project ${site.name}`);
+      await runCommand('npx', ['wrangler', 'pages', 'project', 'delete', site.name, '--yes'], envOptions, site.name);
+    } catch (e) {
+      console.error(`Pages project deletion failed:`, e);
+    }
+  } else {
+    try {
+      console.log(`Deleting Worker project ${site.name}`);
+      await runCommand('npx', ['wrangler', 'delete', '--name', site.name, '--skip-confirmation'], envOptions, site.name);
+    } catch (e) {
+      console.error(`Worker deletion failed:`, e);
+    }
   }
 }
 
-// Background deployment orchestrator
+// ============================================================
+// Background deployment orchestrator — Phương án B: Git Clone → Build → CF Pages Upload
+// ============================================================
 async function deploySite(siteName, creds) {
   const logFilePath = path.join(LOGS_DIR, `${siteName}.log`);
   // Reset logs
@@ -381,106 +408,105 @@ async function deploySite(siteName, creds) {
   await writeLog(siteName, `=== DEPLOYMENT START FOR WEBSITE: ${siteName} ===\n`);
 
   const templateName = creds.template || 'ngo-quyen';
-  const templatePath = path.join(process.cwd(), 'templates', templateName);
+  const sitePath = path.join(SITES_DIR, siteName);
+  const dbName = `${siteName}-db`;
+  const bucketName = `${siteName}-bucket`;
 
   const env = getCloudflareEnv(creds);
   env.NODE_OPTIONS = `--require ${path.join(process.cwd(), 'patch-symlink.cjs').replace(/\\/g, '/')}`;
 
-  const envOptions = {
-    cwd: path.join(SITES_DIR, siteName),
-    env
-  };
+  const envOptions = { cwd: sitePath, env };
 
-  // 1. Check if template node_modules exists
-  const templateModules = path.join(templatePath, 'node_modules');
-  if (!existsSync(templateModules)) {
-    await writeLog(siteName, `Template node_modules not found. Installing dependencies in template first...\n`);
-    await runCommand('npm', ['install'], { cwd: templatePath }, siteName);
-  }
-
-  // 2. Clone Next.js source code to site directory
-  await writeLog(siteName, `Copying template files to sites/${siteName}...\n`);
-  const sitePath = path.join(SITES_DIR, siteName);
+  // ─── STEP 1: Clone template từ GitHub (hoặc fallback về local) ──────────
   if (existsSync(sitePath)) {
     await fs.rm(sitePath, { recursive: true, force: true });
   }
-  await copyDir(templatePath, sitePath);
+  await fs.mkdir(sitePath, { recursive: true });
 
-  // 3. Link template's node_modules to site directory
-  await writeLog(siteName, `Linking template's node_modules to sites/${siteName}...\n`);
-  const siteModules = path.join(sitePath, 'node_modules');
-  await fs.symlink(templateModules, siteModules, 'junction');
+  const repoUrl = TEMPLATE_REPOS[templateName];
+  const localFallback = TEMPLATE_LOCAL[templateName];
 
-  // 4. Provision D1 database
-  await writeLog(siteName, `Checking/Creating Cloudflare D1 database...\n`);
+  if (repoUrl) {
+    await writeLog(siteName, `[GIT] Cloning template từ GitHub: ${repoUrl}...\n`);
+    try {
+      await runCommand('git', ['clone', '--depth=1', repoUrl, '.'], { cwd: sitePath }, siteName);
+      await writeLog(siteName, `[GIT] Clone thành công!\n`);
+    } catch (cloneErr) {
+      await writeLog(siteName, `[GIT] Clone thất bại: ${cloneErr.message}. Dùng template local làm backup...\n`);
+      if (existsSync(sitePath)) await fs.rm(sitePath, { recursive: true, force: true });
+      await copyDir(localFallback, sitePath);
+      await writeLog(siteName, `[LOCAL] Đã copy template local thành công.\n`);
+    }
+  } else {
+    await writeLog(siteName, `[LOCAL] Không tìm thấy repo cho template "${templateName}", dùng template local...\n`);
+    await copyDir(localFallback, sitePath);
+  }
+
+  // ─── STEP 2: Install dependencies ────────────────────────────────────────
+  await writeLog(siteName, `[NPM] Cài đặt dependencies (npm install)...\n`);
+  await runCommand('npm', ['install', '--prefer-offline'], { cwd: sitePath, env }, siteName);
+  await writeLog(siteName, `[NPM] Dependencies đã được cài đặt.\n`);
+
+  // ─── STEP 3: Tạo D1 Database ─────────────────────────────────────────────
+  await writeLog(siteName, `[D1] Kiểm tra/Tạo Cloudflare D1 database "${dbName}"...\n`);
   let dbId = null;
-  const dbName = `${siteName}-db`;
 
   try {
-    let createOutput = '';
     await runCommand('npx', ['wrangler', 'd1', 'create', dbName], envOptions, siteName);
-    
-    // Read the log file to parse database_id (since runCommand writes to log file)
     const currentLogs = await fs.readFile(logFilePath, 'utf8');
     const match = currentLogs.match(/database_id\s*=\s*"([^"]+)"/);
-    if (match) {
-      dbId = match[1];
-    }
+    if (match) dbId = match[1];
   } catch (err) {
-    await writeLog(siteName, `D1 create command returned error (db may already exist). Searching database list...\n`);
+    await writeLog(siteName, `[D1] Lỗi tạo DB (có thể đã tồn tại). Tìm kiếm trong danh sách...\n`);
   }
 
   if (!dbId) {
-    // Search list for existing DB
     dbId = await findExistingD1Database(dbName, envOptions, siteName);
   }
 
-  if (!dbId) {
-    throw new Error(`Failed to configure D1 database ${dbName}`);
-  }
+  if (!dbId) throw new Error(`Không thể tạo/tìm D1 database "${dbName}"`);
+  await writeLog(siteName, `[D1] Database sẵn sàng: ID = ${dbId}\n`);
 
-  await writeLog(siteName, `Configured D1 Database: ID = ${dbId}\n`);
-
-  // Execute schema.sql on the remote D1 database directly using wrangler to bypass DNS propagation issues
-  await writeLog(siteName, `Executing schema.sql on D1 database directly...\n`);
+  // ─── STEP 4: Execute schema.sql ──────────────────────────────────────────
+  await writeLog(siteName, `[D1] Chạy schema.sql trên remote D1...\n`);
   try {
     await runCommand('npx', ['wrangler', 'd1', 'execute', dbName, '--remote', '--file=schema.sql'], envOptions, siteName);
-    await writeLog(siteName, `D1 database schema executed successfully.\n`);
-    
+    await writeLog(siteName, `[D1] Schema được áp dụng thành công.\n`);
+
     if (creds.title) {
-      await writeLog(siteName, `Initializing website title in settings to: "${creds.title}"...\n`);
       const settingKey = templateName === 'ngo-quyen' ? 'header_main_title' : 'site_title';
       const escapedTitle = creds.title.replace(/'/g, "''");
       const sqlCommand = `INSERT OR REPLACE INTO settings (key, value) VALUES ('${settingKey}', '${escapedTitle}');`;
       await runCommand('npx', ['wrangler', 'd1', 'execute', dbName, '--remote', `--command=${JSON.stringify(sqlCommand)}`], envOptions, siteName);
-      await writeLog(siteName, `Website title successfully set in D1.\n`);
+      await writeLog(siteName, `[D1] Đã ghi tiêu đề website: "${creds.title}"\n`);
     }
   } catch (schemaErr) {
-    await writeLog(siteName, `WARNING: Direct schema execution failed: ${schemaErr.message}. Custom tables will attempt to initialize on worker load.\n`);
+    await writeLog(siteName, `[D1] CẢNH BÁO: Schema thất bại: ${schemaErr.message}. Sẽ tự khởi tạo khi worker chạy lần đầu.\n`);
   }
 
-  // 5. Provision R2 bucket
-  await writeLog(siteName, `Checking/Creating Cloudflare R2 bucket...\n`);
-  const bucketName = `${siteName}-bucket`;
+  // ─── STEP 5: Tạo R2 Bucket ───────────────────────────────────────────────
+  await writeLog(siteName, `[R2] Kiểm tra/Tạo R2 bucket "${bucketName}"...\n`);
   let hasR2 = true;
   try {
     await runCommand('npx', ['wrangler', 'r2', 'bucket', 'create', bucketName], envOptions, siteName);
+    await writeLog(siteName, `[R2] Bucket sẵn sàng.\n`);
   } catch (err) {
     const currentLogs = await fs.readFile(logFilePath, 'utf8');
     if (currentLogs.includes('Please enable R2') || currentLogs.includes('10042')) {
       hasR2 = false;
-      await writeLog(siteName, `WARNING: R2 is not enabled on this Cloudflare account. Disabling R2 bucket binding in wrangler.toml to allow deployment...\n`);
+      await writeLog(siteName, `[R2] CẢNH BÁO: R2 chưa được bật trên tài khoản này. Bỏ qua R2 binding.\n`);
     } else {
-      await writeLog(siteName, `R2 bucket may already exist or create failed: ${err.message}. Proceeding with binding...\n`);
+      await writeLog(siteName, `[R2] Bucket có thể đã tồn tại: ${err.message}. Tiếp tục...\n`);
     }
   }
 
-  // 6. Write custom wrangler.toml
-  await writeLog(siteName, `Writing custom wrangler.toml...\n`);
+  // ─── STEP 6: Viết wrangler.toml ──────────────────────────────────────────
+  await writeLog(siteName, `[CONFIG] Tạo wrangler.toml cho Cloudflare Pages...\n`);
   let wranglerTomlContent = `name = "${siteName}"
 main = ".open-next/worker.js"
 compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".open-next/assets"
 
 [assets]
 directory = ".open-next/assets"
@@ -491,7 +517,6 @@ binding = "DB"
 database_name = "${dbName}"
 database_id = "${dbId}"
 `;
-
   if (hasR2) {
     wranglerTomlContent += `
 [[r2_buckets]]
@@ -499,60 +524,214 @@ binding = "R2_BUCKET"
 bucket_name = "${bucketName}"
 `;
   }
-
   await fs.writeFile(path.join(sitePath, 'wrangler.toml'), wranglerTomlContent, 'utf8');
 
-
-  // 7. Build using OpenNext
-  await writeLog(siteName, `Building project with OpenNext...\n`);
+  // ─── STEP 7: Build với OpenNext ───────────────────────────────────────────
+  await writeLog(siteName, `[BUILD] Build project với OpenNext (opennextjs-cloudflare)...\n`);
+  await writeLog(siteName, `[BUILD] Quá trình này có thể mất 3–5 phút, vui lòng chờ...\n`);
   await runCommand('npm', ['run', 'build:cf'], envOptions, siteName);
+  await writeLog(siteName, `[BUILD] Build hoàn tất!\n`);
 
-  // 8. Deploy to Cloudflare Workers & Pages
-  await writeLog(siteName, `Deploying worker to Cloudflare...\n`);
-  await runCommand('npx', ['wrangler', 'deploy'], envOptions, siteName);
+  // ─── STEP 8: Deploy lên Cloudflare Pages (Direct Upload) ─────────────────
+  await writeLog(siteName, `[DEPLOY] Uploading lên Cloudflare Pages...\n`);
+  // Dùng wrangler pages deploy để upload trực tiếp (không cần Git integration)
+  await runCommand('npx', ['wrangler', 'pages', 'deploy', '.open-next/assets',
+    '--project-name', siteName,
+    '--branch', 'main',
+    '--commit-dirty', 'true'
+  ], envOptions, siteName);
 
-  // 9. Extract deploy URL
-  const deployLogs = await fs.readFile(logFilePath, 'utf8');
-  // Match standard workers deployment URL
-  const urlMatch = deployLogs.match(/https:\/\/[a-zA-Z0-9.-]+\.workers\.dev/);
-  const deployUrl = urlMatch ? urlMatch[0] : `https://${siteName}.${creds.accountId}.workers.dev`;
-
-  // 10. Automatically initialize and seed the database using Next.js backend API
-  await writeLog(siteName, `Initializing D1 database schema and seeding default admin users...\n`);
+  // ─── STEP 9: Bind D1 + R2 vào Pages project qua CF REST API ─────────────
+  await writeLog(siteName, `[BIND] Gắn D1/R2 bindings vào Cloudflare Pages project...\n`);
   try {
-    const initUrl = creds.adminPassword 
-      ? `${deployUrl}/api/admin/init?adminPassword=${encodeURIComponent(creds.adminPassword)}`
-      : `${deployUrl}/api/admin/init`;
-    const initRes = await fetch(initUrl);
-    const initData = await initRes.json();
-    if (initRes.ok && initData.success) {
-      await writeLog(siteName, `D1 database successfully initialized and seeded: ${initData.message}\n`);
-    } else {
-      await writeLog(siteName, `D1 database initialization warning: ${initData.error || 'Unknown error'}\n`);
-    }
-  } catch (initErr) {
-    await writeLog(siteName, `Failed to call database init API: ${initErr.message}. You can manually initialize the DB by visiting ${deployUrl}/api/admin/init in your browser.\n`);
+    await bindPagesResources(siteName, dbId, dbName, bucketName, hasR2, creds);
+    await writeLog(siteName, `[BIND] Bindings đã được cấu hình thành công.\n`);
+  } catch (bindErr) {
+    await writeLog(siteName, `[BIND] CẢNH BÁO: Không thể bind tự động: ${bindErr.message}\nBạn có thể cấu hình thủ công trong CF Dashboard → Pages → ${siteName} → Settings → Functions.\n`);
   }
 
-  await writeLog(siteName, `=== DEPLOYMENT SUCCESSFUL ===\nDeployed URL: ${deployUrl}\n\nThông tin đăng nhập Admin:\n- Đường dẫn: ${deployUrl}/admin\n- Tài khoản: admin\n- Mật khẩu: ${creds.adminPassword || '[Mật khẩu bạn đã thiết lập]'}\n`);
+  // ─── STEP 10: Extract deploy URL ─────────────────────────────────────────
+  const deployLogs = await fs.readFile(logFilePath, 'utf8');
+  // CF Pages URL pattern
+  const pagesUrlMatch = deployLogs.match(/https:\/\/[a-zA-Z0-9-]+\.pages\.dev/);
+  const workerUrlMatch = deployLogs.match(/https:\/\/[a-zA-Z0-9.-]+\.workers\.dev/);
+  const deployUrl = pagesUrlMatch?.[0] || workerUrlMatch?.[0] || `https://${siteName}.pages.dev`;
 
-  // Update DB entry
+  // ─── STEP 11: Trigger redeploy để áp dụng bindings ──────────────────────
+  await writeLog(siteName, `[DEPLOY] Kích hoạt redeploy để áp dụng bindings D1/R2...\n`);
+  try {
+    await triggerPagesRedeploy(siteName, creds);
+    await writeLog(siteName, `[DEPLOY] Redeploy đã được kích hoạt. Chờ CF build xong (~2 phút)...\n`);
+    // Chờ 120 giây để CF build
+    await new Promise(r => setTimeout(r, 120000));
+  } catch (redeployErr) {
+    await writeLog(siteName, `[DEPLOY] Không thể trigger redeploy tự động: ${redeployErr.message}\nBindings sẽ có hiệu lực ở lần deploy tiếp theo.\n`);
+    // Chờ 60 giây để deploy đầu tiên xong
+    await new Promise(r => setTimeout(r, 60000));
+  }
+
+  // ─── STEP 12: Seed database ───────────────────────────────────────────────
+  await writeLog(siteName, `[SEED] Khởi tạo dữ liệu admin trong D1...\n`);
+  let seedSuccess = false;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      const initUrl = creds.adminPassword
+        ? `${deployUrl}/api/admin/init?adminPassword=${encodeURIComponent(creds.adminPassword)}`
+        : `${deployUrl}/api/admin/init`;
+      const initRes = await fetch(initUrl, { signal: AbortSignal.timeout(30000) });
+      const initData = await initRes.json();
+      if (initRes.ok && initData.success) {
+        await writeLog(siteName, `[SEED] Database đã được khởi tạo thành công: ${initData.message}\n`);
+        seedSuccess = true;
+        break;
+      } else {
+        await writeLog(siteName, `[SEED] Lần thử ${attempt}: ${initData.error || 'Chưa sẵn sàng'}. Thử lại sau 20s...\n`);
+      }
+    } catch (initErr) {
+      await writeLog(siteName, `[SEED] Lần thử ${attempt} thất bại: ${initErr.message}. Thử lại sau 20s...\n`);
+    }
+    if (attempt < 5) await new Promise(r => setTimeout(r, 20000));
+  }
+
+  if (!seedSuccess) {
+    await writeLog(siteName, `[SEED] Không thể seed tự động. Bạn có thể truy cập thủ công: ${deployUrl}/api/admin/init\n`);
+  }
+
+  // ─── DONE ─────────────────────────────────────────────────────────────────
+  await writeLog(siteName, `\n=== DEPLOYMENT SUCCESSFUL ===\nDeployed URL: ${deployUrl}\n\nThông tin đăng nhập Admin:\n- Đường dẫn: ${deployUrl}/admin\n- Tài khoản: admin\n- Mật khẩu: ${creds.adminPassword || '[Mật khẩu bạn đã thiết lập]'}\n`);
+
   const currentDb = await readDb();
   const siteEntry = currentDb.sites.find(s => s.name === siteName);
   if (siteEntry) {
     siteEntry.status = 'active';
     siteEntry.deployUrl = deployUrl;
     siteEntry.databaseId = dbId;
+    siteEntry.bucketName = bucketName;
+    siteEntry.deployType = 'pages';
     await writeDb(currentDb);
   }
 
-  // Cleanup local temporary directory to save disk space
+  // Cleanup
   try {
-    await writeLog(siteName, `Cleaning up temporary local files in sites/${siteName} to free up disk space...\n`);
+    await writeLog(siteName, `[CLEANUP] Xóa thư mục build tạm thời...\n`);
     await fs.rm(sitePath, { recursive: true, force: true });
-    await writeLog(siteName, `Cleanup completed. Local folder removed.\n`);
+    await writeLog(siteName, `[CLEANUP] Hoàn tất.\n`);
   } catch (cleanErr) {
-    await writeLog(siteName, `WARNING: Failed to cleanup local temporary files: ${cleanErr.message}\n`);
+    await writeLog(siteName, `[CLEANUP] CẢNH BÁO: Không thể xóa files tạm: ${cleanErr.message}\n`);
+  }
+}
+
+// ============================================================
+// CF Pages API: Bind D1 + R2 vào Pages project
+// ============================================================
+async function bindPagesResources(siteName, dbId, dbName, bucketName, hasR2, creds) {
+  const accountId = creds.accountId;
+  const apiToken = creds.apiToken;
+  const apiKey = creds.apiKey;
+  const email = creds.email;
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiToken) {
+    headers['Authorization'] = `Bearer ${apiToken}`;
+  } else if (apiKey && email) {
+    headers['X-Auth-Key'] = apiKey;
+    headers['X-Auth-Email'] = email;
+  } else {
+    throw new Error('Không có thông tin xác thực Cloudflare để bind resources.');
+  }
+
+  // Build bindings object
+  const bindings = [
+    {
+      name: 'DB',
+      type: 'd1',
+      id: dbId,
+    }
+  ];
+
+  if (hasR2) {
+    bindings.push({
+      name: 'R2_BUCKET',
+      type: 'r2_bucket',
+      bucket_name: bucketName,
+    });
+  }
+
+  // PATCH Pages project deployment config
+  const patchUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${siteName}`;
+  const patchBody = {
+    deployment_configs: {
+      production: {
+        d1_databases: {
+          DB: { id: dbId }
+        },
+        ...(hasR2 ? { r2_buckets: { R2_BUCKET: { name: bucketName } } } : {}),
+        compatibility_date: '2025-06-01',
+        compatibility_flags: ['nodejs_compat'],
+      },
+      preview: {
+        d1_databases: {
+          DB: { id: dbId }
+        },
+        ...(hasR2 ? { r2_buckets: { R2_BUCKET: { name: bucketName } } } : {}),
+        compatibility_date: '2025-06-01',
+        compatibility_flags: ['nodejs_compat'],
+      }
+    }
+  };
+
+  const patchRes = await fetch(patchUrl, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(patchBody),
+    signal: AbortSignal.timeout(30000)
+  });
+
+  const patchData = await patchRes.json();
+  if (!patchData.success) {
+    const errors = patchData.errors?.map(e => e.message).join(', ') || 'Unknown error';
+    throw new Error(`CF Pages PATCH failed: ${errors}`);
+  }
+}
+
+// ============================================================
+// CF Pages API: Trigger redeploy để áp dụng bindings mới
+// ============================================================
+async function triggerPagesRedeploy(siteName, creds) {
+  const accountId = creds.accountId;
+  const apiToken = creds.apiToken;
+  const apiKey = creds.apiKey;
+  const email = creds.email;
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiToken) {
+    headers['Authorization'] = `Bearer ${apiToken}`;
+  } else if (apiKey && email) {
+    headers['X-Auth-Key'] = apiKey;
+    headers['X-Auth-Email'] = email;
+  } else {
+    throw new Error('Không có thông tin xác thực.');
+  }
+
+  // Get latest deployment ID
+  const listUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${siteName}/deployments?per_page=1`;
+  const listRes = await fetch(listUrl, { headers, signal: AbortSignal.timeout(15000) });
+  const listData = await listRes.json();
+
+  if (!listData.success || !listData.result?.length) {
+    throw new Error('Không tìm thấy deployment nào để retry.');
+  }
+
+  const latestDeployId = listData.result[0].id;
+
+  // Retry deployment
+  const retryUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${siteName}/deployments/${latestDeployId}/retry`;
+  const retryRes = await fetch(retryUrl, { method: 'POST', headers, signal: AbortSignal.timeout(15000) });
+  const retryData = await retryRes.json();
+
+  if (!retryData.success) {
+    const errors = retryData.errors?.map(e => e.message).join(', ') || 'Unknown';
+    throw new Error(`Retry failed: ${errors}`);
   }
 }
 
