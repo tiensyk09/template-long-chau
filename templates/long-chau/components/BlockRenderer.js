@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useCart } from '@/components/CartContext';
 
 export default function BlockRenderer({ blocks = [] }) {
   if (!Array.isArray(blocks)) return null;
@@ -152,6 +153,7 @@ const FLASH_PRODUCTS = [
     sold: 1, total: 400, unit: 'Hộp',
     img: '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png',
     flag: '🇻🇳',
+    slug: 'glucerna-sua-bot-dai-thao-duong',
   },
   {
     name: 'Sữa cân bằng dinh dưỡng Meiji Meibalance hương n...',
@@ -159,6 +161,7 @@ const FLASH_PRODUCTS = [
     sold: 1, total: 100, unit: 'Lốc',
     img: '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png',
     flag: '🇯🇵',
+    slug: 'sua-ensure-gold-vanilla-900g',
   },
   {
     name: 'Sữa bổ sung dinh dưỡng đặc biệt cho người đái tháo đường Glucerna',
@@ -166,6 +169,7 @@ const FLASH_PRODUCTS = [
     sold: 6, total: 50, unit: 'Hộp',
     img: '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png',
     flag: '🇺🇸',
+    slug: 'glucerna-sua-bot-dai-thao-duong',
   },
   {
     name: 'Viên hỗ trợ phát triển não bộ sức khỏe cho mắt Brauer Baby & Kids',
@@ -173,6 +177,7 @@ const FLASH_PRODUCTS = [
     sold: 5, total: 100, unit: 'Hộp',
     img: '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png',
     flag: '🇦🇺',
+    slug: 'brauer-baby-dha-60v',
   },
   {
     name: 'Viên uống hỗ trợ giảm vết thâm, sạm New Nordic Skin Care Pigment Clear',
@@ -180,6 +185,7 @@ const FLASH_PRODUCTS = [
     sold: 13, total: 100, unit: 'Hộp',
     img: '/images/vien_uong_giam_vet_tham_sam_tan_nhang_giup_da_sang_min_skin_care_pigment_clear_60v_new_nordic_00011057_2_d86c2004d6.jpg',
     flag: '🇰🇷',
+    slug: 'new-nordic-skin-care-pigment-clear',
   },
   {
     name: 'Sữa tăng cường sức khỏe khối cơ tăng miễn dịch Ensure Gold',
@@ -187,6 +193,7 @@ const FLASH_PRODUCTS = [
     sold: 13, total: 100, unit: 'Hộp',
     img: '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png',
     flag: '🇺🇸',
+    slug: 'sua-ensure-gold-vanilla-900g',
   },
 ];
 
@@ -199,6 +206,7 @@ const SALE_TIMES = [
 
 function FlashSaleBlock({ configs = {} }) {
   const [timeLeft, setTimeLeft] = useState(configs.duration || 43200);
+  const { addItem } = useCart();
 
   useEffect(() => {
     if (timeLeft <= 0) return;
@@ -210,11 +218,26 @@ function FlashSaleBlock({ configs = {} }) {
   const mins = Math.floor((timeLeft % 3600) / 60).toString().padStart(2, '0');
   const secs = (timeLeft % 60).toString().padStart(2, '0');
 
-  const products = (configs.items && configs.items.length > 0) ? configs.items.map((item, i) => ({
-    ...FLASH_PRODUCTS[i % FLASH_PRODUCTS.length],
-    ...item,
-    img: item.image || FLASH_PRODUCTS[i % FLASH_PRODUCTS.length].img,
-  })) : FLASH_PRODUCTS;
+  const products = (configs.items && configs.items.length > 0) ? configs.items.map((item, i) => {
+    const fallback = FLASH_PRODUCTS[i % FLASH_PRODUCTS.length];
+    return {
+      ...fallback,
+      ...item,
+      img: item.image || fallback.img,
+      slug: item.slug || fallback.slug
+    };
+  }) : FLASH_PRODUCTS;
+
+  const handleAddToCart = (item, idx) => {
+    const productForCart = {
+      id: item.id || `flashsale-${idx}`,
+      name: item.name,
+      price: item.salePrice || item.price,
+      thumbnail: item.img || item.image,
+      unit: item.unit || 'Hộp'
+    };
+    addItem(productForCart, null, 1);
+  };
 
   return (
     <div className="lc-section-bg-white">
@@ -255,38 +278,44 @@ function FlashSaleBlock({ configs = {} }) {
           <div className="lc-product-grid">
             {products.map((item, idx) => {
               const soldPercent = Math.round(((item.sold || 0) / (item.total || 100)) * 100);
+              const itemSlug = item.slug || 'vitamin-c-1000mg-puritans-pride';
+
               return (
-                <div className="lc-product-card" key={idx}>
+                <div className="lc-product-card" key={idx} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                   {item.flag && <div className="lc-product-flag">{item.flag}</div>}
                   {item.discount && <div className="lc-product-discount">{item.discount}</div>}
-                  <div className="lc-product-img">
-                    <img
-                      src={item.img || item.image || '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png'}
-                      alt={item.name}
-                      onError={(e) => {
-                        e.target.src = `https://picsum.photos/160/160?random=${idx + 10}`;
-                      }}
-                    />
-                  </div>
-                  <div className="lc-product-info">
-                    <div className="lc-product-name">{item.name}</div>
-                    <div className="lc-product-price-row">
-                      <span className="lc-product-sale-price">
-                        {item.salePrice ? item.salePrice.toLocaleString('vi-VN') + 'đ' : 'Liên hệ'}
-                        {item.unit && <span className="lc-product-unit"> / {item.unit}</span>}
-                      </span>
-                      {item.price && <span className="lc-product-old-price">{item.price.toLocaleString('vi-VN')}đ</span>}
+                  <Link href={`/products/${itemSlug}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block', flex: 1 }}>
+                    <div className="lc-product-img">
+                      <img
+                        src={item.img || item.image || '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png'}
+                        alt={item.name}
+                        onError={(e) => {
+                          e.target.src = `https://picsum.photos/160/160?random=${idx + 10}`;
+                        }}
+                      />
                     </div>
-                    <div className="lc-progress-wrap">
-                      <div className="lc-progress-bg">
-                        <div className="lc-progress-fill" style={{ width: `${Math.max(soldPercent, 5)}%` }} />
+                    <div className="lc-product-info">
+                      <div className="lc-product-name" style={{ minHeight: '36px' }}>{item.name}</div>
+                      <div className="lc-product-price-row">
+                        <span className="lc-product-sale-price">
+                          {item.salePrice ? item.salePrice.toLocaleString('vi-VN') + 'đ' : 'Liên hệ'}
+                          {item.unit && <span className="lc-product-unit"> / {item.unit}</span>}
+                        </span>
+                        {item.price && <span className="lc-product-old-price">{item.price.toLocaleString('vi-VN')}đ</span>}
                       </div>
-                      <div className="lc-progress-lbl">
-                        <span className="lc-progress-fire">🔥</span>
-                        {soldPercent > 0 ? `Đã bán ${item.sold}/${item.total} suất` : `Mở bán ${item.total} suất`}
+                      <div className="lc-progress-wrap">
+                        <div className="lc-progress-bg">
+                          <div className="lc-progress-fill" style={{ width: `${Math.max(soldPercent, 5)}%` }} />
+                        </div>
+                        <div className="lc-progress-lbl">
+                          <span className="lc-progress-fire">🔥</span>
+                          {soldPercent > 0 ? `Đã bán ${item.sold}/${item.total} suất` : `Mở bán ${item.total} suất`}
+                        </div>
                       </div>
                     </div>
-                    <button className="lc-btn-chon-mua" onClick={() => alert(`Đã thêm "${item.name}" vào giỏ hàng!`)}>
+                  </Link>
+                  <div style={{ padding: '0 12px 12px 12px', marginTop: 'auto' }}>
+                    <button className="lc-btn-chon-mua" onClick={() => handleAddToCart(item, idx)}>
                       Chọn mua
                     </button>
                   </div>
@@ -317,6 +346,7 @@ const DEFAULT_CATEGORIES = [
 ];
 
 function CategoriesBlock({ configs = {} }) {
+  const { showToast } = useCart();
   const cats = (configs.items && configs.items.length > 0) ? configs.items : DEFAULT_CATEGORIES;
   return (
     <div className="lc-section-bg-white">
@@ -326,11 +356,11 @@ function CategoriesBlock({ configs = {} }) {
             <span className="lc-section-icon">🏆</span>
             <h2 className="lc-section-title">{configs.title || 'Danh mục nổi bật'}</h2>
           </div>
-          <span className="lc-section-link" onClick={() => alert('Xem tất cả danh mục')}>Xem tất cả ›</span>
+          <span className="lc-section-link" onClick={() => showToast('Tính năng xem tất cả danh mục sẽ sớm ra mắt!', 'info')}>Xem tất cả ›</span>
         </div>
         <div className="lc-categories-grid">
           {cats.map((cat, i) => (
-            <div key={i} className="lc-category-card" onClick={() => alert(`Xem "${cat.title}"`)}>
+            <div key={i} className="lc-category-card" onClick={() => showToast(`Đang chuyển hướng đến danh mục "${cat.title}"...`, 'info')}>
               <div className="lc-category-icon">
                 {cat.img ? (
                   <img
@@ -364,6 +394,7 @@ const DEFAULT_HEALTH_CHECKS = [
 ];
 
 function HealthChecksBlock({ configs = {} }) {
+  const { showToast } = useCart();
   const checks = (configs.items && configs.items.length > 0) ? configs.items : DEFAULT_HEALTH_CHECKS;
   return (
     <div className="lc-section-bg-white">
@@ -374,7 +405,7 @@ function HealthChecksBlock({ configs = {} }) {
             <p className="lc-healthcheck-desc">{configs.description || 'Kết quả đánh giá sẽ cho bạn lời khuyên xử trí phù hợp!'}</p>
             <div className="lc-healthcheck-cards">
               {checks.map((item, i) => (
-                <div key={i} className="lc-healthcheck-card" onClick={() => alert(`Bắt đầu: "${item.title}"`)}>
+                <div key={i} className="lc-healthcheck-card" onClick={() => showToast(`Bắt đầu khảo sát: "${item.title}"...`, 'info')}>
                   <div className="lc-healthcheck-card-icon">
                     {item.icon && item.icon.startsWith('/') ? (
                       <img src={item.icon} alt={item.title} onError={(e) => { e.target.parentElement.innerHTML = '🧬'; }} />
@@ -486,6 +517,7 @@ const ARTICLE_THUMBNAILS = [
 function RecentPostsBlock({ configs = {} }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { showToast } = useCart();
 
   useEffect(() => {
     fetch(`/api/posts?status=published&limit=${configs.limit || 6}`)
@@ -506,7 +538,7 @@ function RecentPostsBlock({ configs = {} }) {
             <span className="lc-section-icon">📰</span>
             <h2 className="lc-section-title">{configs.title || 'Góc Sức Khỏe'}</h2>
           </div>
-          <span className="lc-section-link" onClick={() => alert('Xem tất cả bài viết')}>Xem tất cả ›</span>
+          <span className="lc-section-link" onClick={() => showToast('Tính năng xem tất cả bài viết sẽ sớm ra mắt!', 'info')}>Xem tất cả ›</span>
         </div>
 
         {loading ? (
@@ -570,6 +602,7 @@ const DEFAULT_BRANDS = [
 ];
 
 function BrandsBlock({ configs = {} }) {
+  const { showToast } = useCart();
   const brands = (configs.items && configs.items.length > 0)
     ? configs.items.map((item, i) => ({ ...DEFAULT_BRANDS[i % DEFAULT_BRANDS.length], name: item.name, logoImg: item.logo || DEFAULT_BRANDS[i % DEFAULT_BRANDS.length].logoImg }))
     : DEFAULT_BRANDS;
@@ -582,11 +615,11 @@ function BrandsBlock({ configs = {} }) {
             <span className="lc-section-icon">🏅</span>
             <h2 className="lc-section-title">{configs.title || 'Thương hiệu yêu thích'}</h2>
           </div>
-          <span className="lc-section-link" onClick={() => alert('Xem tất cả thương hiệu')}>Xem tất cả ›</span>
+          <span className="lc-section-link" onClick={() => showToast('Tính năng xem tất cả thương hiệu sẽ sớm ra mắt!', 'info')}>Xem tất cả ›</span>
         </div>
         <div className="lc-brands-grid">
           {brands.map((brand, i) => (
-            <div key={i} className="lc-brand-card" onClick={() => alert(`Xem thương hiệu "${brand.name}"`)}>
+            <div key={i} className="lc-brand-card" onClick={() => showToast(`Xem thông tin thương hiệu "${brand.name}"...`, 'info')}>
               <img
                 className="lc-brand-product-img"
                 src={brand.productImg}
@@ -620,8 +653,6 @@ function HtmlBlock({ configs = {} }) {
 }
 
 // ─── 9. PRODUCTS BLOCK ────────────────────────────────────────
-import { useCart } from '@/components/CartContext';
-
 function ProductsBlock({ configs = {} }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);

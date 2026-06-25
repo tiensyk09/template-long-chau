@@ -1321,3 +1321,97 @@ ul { list-style: none; }
   .lc-footer-grid { grid-template-columns: repeat(2, 1fr); }
   .lc-blog-grid { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   TOAST NOTIFICATION STYLES
+   ============================================================ */
+.lc-toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+.lc-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 320px;
+  max-width: 450px;
+  background: #ffffff;
+  color: var(--lc-text);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border-left: 4px solid var(--lc-blue);
+  animation: lc-toast-slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: all 0.3s;
+}
+.lc-toast-success {
+  border-left-color: #10b981;
+}
+.lc-toast-error {
+  border-left-color: #ef4444;
+}
+.lc-toast-info {
+  border-left-color: var(--lc-blue);
+}
+.lc-toast-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.lc-toast-success .lc-toast-icon-wrap {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+.lc-toast-error .lc-toast-icon-wrap {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+.lc-toast-info .lc-toast-icon-wrap {
+  background: rgba(0, 91, 205, 0.1);
+  color: var(--lc-blue);
+}
+.lc-toast-message {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  flex: 1;
+}
+.lc-toast-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--lc-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+.lc-toast-close:hover {
+  color: var(--lc-text);
+}
+
+@keyframes lc-toast-slide-in {
+  from {
+    transform: translateY(100%) scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}

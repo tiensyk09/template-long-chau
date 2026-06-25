@@ -49,9 +49,27 @@ function cartReducer(state, action) {
   }
 }
 
+function ToastItem({ toast, onRemove }) {
+  useEffect(() => {
+    const timer = setTimeout(onRemove, 3500);
+    return () => clearTimeout(timer);
+  }, [onRemove]);
+
+  return (
+    <div className={`lc-toast lc-toast-${toast.type}`}>
+      <div className="lc-toast-icon-wrap">
+        {toast.type === 'success' ? '✓' : toast.type === 'error' ? '✗' : 'ℹ'}
+      </div>
+      <div className="lc-toast-message">{toast.message}</div>
+      <button className="lc-toast-close" onClick={onRemove}>×</button>
+    </div>
+  );
+}
+
 export function CartProvider({ children }) {
   const [state, dispatch] = useReducer(cartReducer, { items: [] });
   const [hydrated, setHydrated] = useState(false);
+  const [toasts, setToasts] = useState([]);
 
   // Hydrate from localStorage on mount
   useEffect(() => {
@@ -71,6 +89,15 @@ export function CartProvider({ children }) {
     }
   }, [state, hydrated]);
 
+  const showToast = (message, type = 'success') => {
+    const id = Date.now() + Math.random().toString(36).substring(2, 9);
+    setToasts(prev => [...prev, { id, message, type }]);
+  };
+
+  const removeToast = (id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
   const totalItems = state.items.reduce((sum, i) => sum + i.quantity, 0);
   const subtotal = state.items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
 
@@ -80,12 +107,22 @@ export function CartProvider({ children }) {
       totalItems,
       subtotal,
       dispatch,
-      addItem: (product, variant, quantity) => dispatch({ type: 'ADD_ITEM', payload: { product, variant, quantity } }),
+      addItem: (product, variant, quantity) => {
+        dispatch({ type: 'ADD_ITEM', payload: { product, variant, quantity } });
+        showToast(`Đã thêm "${product.name}" vào giỏ hàng!`, 'success');
+      },
       removeItem: (key) => dispatch({ type: 'REMOVE_ITEM', payload: { key } }),
       updateQty: (key, quantity) => dispatch({ type: 'UPDATE_QTY', payload: { key, quantity } }),
       clearCart: () => dispatch({ type: 'CLEAR' }),
+      showToast,
+      hydrated,
     }}>
       {children}
+      <div className="lc-toast-container">
+        {toasts.map(toast => (
+          <ToastItem key={toast.id} toast={toast} onRemove={() => removeToast(toast.id)} />
+        ))}
+      </div>
     </CartContext.Provider>
   );
 }

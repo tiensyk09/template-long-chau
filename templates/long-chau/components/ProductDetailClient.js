@@ -13,7 +13,7 @@ export default function ProductDetailClient({
   related = []
 }) {
   const router = useRouter();
-  const { addItem } = useCart();
+  const { addItem, showToast } = useCart();
   const [selectedVariant, setSelectedVariant] = useState(variants[0] || null);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('description');
@@ -60,7 +60,7 @@ export default function ProductDetailClient({
 
     setLocalReviews([newRev, ...localReviews]);
     setReviewForm({ name: '', rating: 5, comment: '' });
-    alert('Cảm ơn bạn đã gửi đánh giá!');
+    showToast('Cảm ơn bạn đã gửi đánh giá!', 'success');
   };
 
   return (

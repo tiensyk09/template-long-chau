@@ -8,7 +8,7 @@ import { useCart } from '@/components/CartContext';
 
 export default function CheckoutPageClient() {
   const router = useRouter();
-  const { items, subtotal, clearCart } = useCart();
+  const { items, subtotal, clearCart, hydrated } = useCart();
 
   const [form, setForm] = useState({
     name: '',
@@ -113,6 +113,18 @@ export default function CheckoutPageClient() {
       setLoading(false);
     }
   };
+
+  if (!hydrated) {
+    return (
+      <div className="lc-page-wrapper">
+        <Header />
+        <main style={{ background: '#f4f6f9', padding: '100px 0', textAlign: 'center' }}>
+          <div style={{ color: 'var(--lc-muted)', fontSize: '15px', fontWeight: 500 }}>Đang chuẩn bị thông tin đặt hàng...</div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   if (orderSuccess) {
     const { order, paymentInfo } = orderSuccess;

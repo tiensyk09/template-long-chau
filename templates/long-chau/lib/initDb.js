@@ -139,15 +139,15 @@ export async function initDatabase() {
   await query(`
     CREATE TABLE IF NOT EXISTS shop_categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      slug TEXT NOT NULL UNIQUE,
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) NOT NULL UNIQUE,
       parent_id INTEGER,
-      icon TEXT,
+      icon VARCHAR(100),
       image TEXT,
       description TEXT,
       is_active INTEGER DEFAULT 1,
       sort_order INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at VARCHAR(100) DEFAULT (datetime('now'))
     )
   `);
 
@@ -156,31 +156,31 @@ export async function initDatabase() {
     CREATE TABLE IF NOT EXISTS products (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       category_id INTEGER,
-      name TEXT NOT NULL,
-      slug TEXT NOT NULL UNIQUE,
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(255) NOT NULL UNIQUE,
       short_description TEXT,
       description TEXT,
       price REAL NOT NULL DEFAULT 0,
       original_price REAL,
       thumbnail TEXT,
       images TEXT,
-      brand TEXT,
-      origin TEXT,
-      unit TEXT DEFAULT 'Hộp',
+      brand VARCHAR(255),
+      origin VARCHAR(255),
+      unit VARCHAR(100) DEFAULT 'Hộp',
       stock INTEGER DEFAULT 0,
       sold_count INTEGER DEFAULT 0,
       view_count INTEGER DEFAULT 0,
       rating REAL DEFAULT 0,
-      status TEXT DEFAULT 'active',
+      status VARCHAR(50) DEFAULT 'active',
       is_featured INTEGER DEFAULT 0,
       is_flash_sale INTEGER DEFAULT 0,
       flash_sale_price REAL,
-      flash_sale_end TEXT,
+      flash_sale_end VARCHAR(100),
       tags TEXT,
       meta_title TEXT,
       meta_description TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
+      created_at VARCHAR(100) DEFAULT (datetime('now')),
+      updated_at VARCHAR(100) DEFAULT (datetime('now')),
       FOREIGN KEY (category_id) REFERENCES shop_categories(id) ON DELETE SET NULL
     )
   `);
@@ -190,11 +190,11 @@ export async function initDatabase() {
     CREATE TABLE IF NOT EXISTS product_variants (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       product_id INTEGER NOT NULL,
-      name TEXT NOT NULL,
+      name VARCHAR(255) NOT NULL,
       price REAL NOT NULL,
       stock INTEGER DEFAULT 0,
       sort_order INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now')),
+      created_at VARCHAR(100) DEFAULT (datetime('now')),
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
     )
   `);
@@ -205,12 +205,12 @@ export async function initDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       product_id INTEGER NOT NULL,
       order_id INTEGER,
-      reviewer_name TEXT NOT NULL,
+      reviewer_name VARCHAR(255) NOT NULL,
       reviewer_id INTEGER,
       rating INTEGER NOT NULL DEFAULT 5,
       comment TEXT,
       is_verified INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now')),
+      created_at VARCHAR(100) DEFAULT (datetime('now')),
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
     )
   `);
@@ -219,26 +219,26 @@ export async function initDatabase() {
   await query(`
     CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      order_code TEXT NOT NULL UNIQUE,
+      order_code VARCHAR(100) NOT NULL UNIQUE,
       user_id INTEGER,
-      customer_name TEXT NOT NULL,
-      customer_phone TEXT NOT NULL,
-      customer_email TEXT,
+      customer_name VARCHAR(255) NOT NULL,
+      customer_phone VARCHAR(100) NOT NULL,
+      customer_email VARCHAR(255),
       shipping_address TEXT NOT NULL,
-      shipping_province TEXT,
+      shipping_province VARCHAR(255),
       shipping_note TEXT,
       items TEXT NOT NULL,
       subtotal REAL NOT NULL DEFAULT 0,
       discount_amount REAL DEFAULT 0,
       shipping_fee REAL DEFAULT 0,
       total REAL NOT NULL DEFAULT 0,
-      coupon_code TEXT,
-      payment_method TEXT DEFAULT 'cod',
-      payment_status TEXT DEFAULT 'pending',
-      status TEXT DEFAULT 'pending',
+      coupon_code VARCHAR(100),
+      payment_method VARCHAR(50) DEFAULT 'cod',
+      payment_status VARCHAR(50) DEFAULT 'pending',
+      status VARCHAR(50) DEFAULT 'pending',
       admin_note TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
+      created_at VARCHAR(100) DEFAULT (datetime('now')),
+      updated_at VARCHAR(100) DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     )
   `);
@@ -247,16 +247,16 @@ export async function initDatabase() {
   await query(`
     CREATE TABLE IF NOT EXISTS coupons (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      code TEXT NOT NULL UNIQUE,
-      discount_type TEXT NOT NULL DEFAULT 'percent',
+      code VARCHAR(100) NOT NULL UNIQUE,
+      discount_type VARCHAR(50) NOT NULL DEFAULT 'percent',
       discount_value REAL NOT NULL,
       min_order REAL DEFAULT 0,
       max_discount REAL,
       usage_limit INTEGER,
       usage_count INTEGER DEFAULT 0,
-      expires_at TEXT,
+      expires_at VARCHAR(100),
       is_active INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at VARCHAR(100) DEFAULT (datetime('now'))
     )
   `);
 
@@ -438,10 +438,10 @@ export async function seedData(adminPassword, force = false) {
             title: 'FLASH SALE GIÁ TỐT',
             duration: 7200,
             items: [
-              { name: 'Sữa bột Abbott Grow 4 Hương Vani 900g', price: 380000, salePrice: 329000, discount: '-13%', sold: 45, total: 50, image: 'https://nhathuoclongchau.com.vn/images/grow.png' },
-              { name: 'Viên uống Puritan\'s Pride Vitamin C 1000mg', price: 280000, salePrice: 199000, discount: '-29%', sold: 22, total: 30, image: 'https://nhathuoclongchau.com.vn/images/vitaminc.png' },
-              { name: 'Nước nhỏ mắt Rohto Nhật Bản Cool 12ml', price: 65000, salePrice: 49000, discount: '-25%', sold: 80, total: 100, image: 'https://nhathuoclongchau.com.vn/images/rohto.png' },
-              { name: 'Dầu cá Omega 3 Fish Oil 1000mg Kirkland', price: 450000, salePrice: 349000, discount: '-22%', sold: 15, total: 40, image: 'https://nhathuoclongchau.com.vn/images/fishoil.png' }
+              { name: 'Sữa bột Abbott Grow 4 Hương Vani 900g', price: 380000, salePrice: 329000, discount: '-13%', sold: 45, total: 50, image: 'https://nhathuoclongchau.com.vn/images/grow.png', slug: 'sua-ensure-gold-vanilla-900g' },
+              { name: 'Viên uống Puritan\'s Pride Vitamin C 1000mg', price: 280000, salePrice: 199000, discount: '-29%', sold: 22, total: 30, image: 'https://nhathuoclongchau.com.vn/images/vitaminc.png', slug: 'vitamin-c-1000mg-puritans-pride' },
+              { name: 'Nước nhỏ mắt Rohto Nhật Bản Cool 12ml', price: 65000, salePrice: 49000, discount: '-25%', sold: 80, total: 100, image: 'https://nhathuoclongchau.com.vn/images/rohto.png', slug: 'vitamins-for-life-super-b-complex' },
+              { name: 'Dầu cá Omega 3 Fish Oil 1000mg Kirkland', price: 450000, salePrice: 349000, discount: '-22%', sold: 15, total: 40, image: 'https://nhathuoclongchau.com.vn/images/fishoil.png', slug: 'omega-3-fish-oil-kirkland' }
             ]
           }
         },

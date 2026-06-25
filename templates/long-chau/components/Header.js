@@ -23,7 +23,7 @@ export default function Header() {
   const [logoIcon, setLogoIcon] = useState('');
   const [links, setLinks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const { totalItems } = useCart();
+  const { totalItems, hydrated } = useCart();
 
   useEffect(() => {
     async function loadNavbarData() {
@@ -98,7 +98,7 @@ export default function Header() {
             </Link>
             <Link href="/cart" className="lc-btn-cart" style={{ position: 'relative', textDecoration: 'none' }}>
               🛒 Giỏ hàng
-              {totalItems > 0 && (
+              {hydrated && totalItems > 0 && (
                 <span className="lc-cart-badge" style={{
                   position: 'absolute',
                   top: '-8px',

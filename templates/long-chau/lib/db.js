@@ -8,7 +8,8 @@ function translateSqlForMysql(sql) {
     .replace(/INTEGER PRIMARY KEY AUTOINCREMENT/gi, 'INT AUTO_INCREMENT PRIMARY KEY')
     .replace(/datetime\('now'\)/gi, 'NOW()')
     .replace(/LONGTEXT NOT NULL/gi, 'LONGTEXT')
-    .replace(/INSERT OR IGNORE/gi, 'INSERT IGNORE');
+    .replace(/INSERT OR IGNORE/gi, 'INSERT IGNORE')
+    .replace(/INSERT OR REPLACE/gi, 'REPLACE');
 }
 
 async function mysqlQuery(sql, params = []) {
@@ -27,7 +28,7 @@ async function mysqlQuery(sql, params = []) {
     global._mysqlPool = _mysqlPool;
   }
   const translatedSql = translateSqlForMysql(sql);
-  const [rows] = await _mysqlPool.execute(translatedSql, params);
+  const [rows] = await _mysqlPool.query(translatedSql, params);
   return rows;
 }
 

@@ -8,7 +8,7 @@ import { useCart } from '@/components/CartContext';
 
 export default function CartPageClient() {
   const router = useRouter();
-  const { items, subtotal, updateQty, removeItem, clearCart } = useCart();
+  const { items, subtotal, updateQty, removeItem, clearCart, hydrated } = useCart();
 
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
@@ -86,6 +86,18 @@ export default function CartPageClient() {
     }));
     router.push('/checkout');
   };
+
+  if (!hydrated) {
+    return (
+      <div className="lc-page-wrapper">
+        <Header />
+        <main style={{ background: '#f4f6f9', padding: '100px 0', textAlign: 'center' }}>
+          <div style={{ color: 'var(--lc-muted)', fontSize: '15px', fontWeight: 500 }}>Đang tải thông tin giỏ hàng...</div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="lc-page-wrapper">
