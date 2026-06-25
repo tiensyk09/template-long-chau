@@ -1,7 +1,7 @@
-FROM node:22-alpine
+FROM node:22-slim
 
-# Install git (required for cloning templates)
-RUN apk add --no-cache git openssh-client
+# Install git (required for cloning templates) and clean apt cache
+RUN apt-get update && apt-get install -y git openssh-client && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
