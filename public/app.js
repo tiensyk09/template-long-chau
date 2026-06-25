@@ -66,6 +66,7 @@ let currentSiteForDelete = null;
 let currentSiteForSettings = null;
 let currentSiteForApi = null;
 let currentSiteForCreds = null;
+let currentSiteForAdmin = null;
 let pollingInterval = null;
 
 // ============================================================
@@ -326,6 +327,7 @@ function createSiteCard(site) {
     <div class="site-meta">📅 ${createdAt}</div>
     <div class="site-actions">
       ${site.status === 'active' ? `
+        <button class="btn btn-ghost btn-sm" onclick="openAdminModal('${site.name}')">👤 Tài khoản Admin</button>
         <button class="btn btn-ghost btn-sm" onclick="openSettingsModal('${site.name}')">⚙️ Cài đặt</button>
         <button class="btn btn-ghost btn-sm" onclick="openApiModal('${site.name}')">🔑 API Key</button>
         <button class="btn btn-ghost btn-sm" onclick="openLogModal('${site.name}')">📋 Log</button>
@@ -1071,6 +1073,110 @@ document.getElementById('creds-form').addEventListener('submit', async (e) => {
 });
 
 // ============================================================
+// ADMIN MODAL (per site)
+// ============================================================
+function openAdminModal(siteName) {
+  currentSiteForAdmin = siteName;
+  const site = allSites.find(s => s.name === siteName);
+  if (!site) return;
+
+  document.getElementById('admin-site-name-text').textContent = `Website: ${siteName}`;
+  
+  const adminUrl = site.deployUrl ? `${site.deployUrl.replace(/\/$/, '')}/admin` : '';
+  document.getElementById('admin-login-url').value = adminUrl;
+  
+  const visitLink = document.getElementById('admin-visit-link');
+  if (visitLink) {
+    visitLink.href = adminUrl || '#';
+  }
+
+  const currentPwField = document.getElementById('admin-current-password');
+  if (site.adminPassword) {
+    currentPwField.value = site.adminPassword;
+    currentPwField.placeholder = '';
+  } else {
+    currentPwField.value = '';
+    currentPwField.placeholder = 'Mật khẩu được tạo trước đó, không thể xem lại';
+  }
+  
+  // Reset form
+  document.getElementById('admin-new-password').value = '';
+  document.getElementById('admin-confirm-password').value = '';
+  
+  // Reset visibility
+  document.getElementById('admin-current-password').type = 'password';
+  document.getElementById('admin-new-password').type = 'password';
+  document.getElementById('admin-confirm-password').type = 'password';
+  
+  // Reset eye icons
+  const currentEye = document.querySelector('#admin-current-password + .btn-eye');
+  if (currentEye) {
+    currentEye.textContent = '👁';
+    currentEye.classList.remove('active');
+  }
+  const newEye = document.querySelector('#admin-new-password + .btn-eye');
+  if (newEye) {
+    newEye.textContent = '👁';
+    newEye.classList.remove('active');
+  }
+  const confirmEye = document.querySelector('#admin-confirm-password + .btn-eye');
+  if (confirmEye) {
+    confirmEye.textContent = '👁';
+    confirmEye.classList.remove('active');
+  }
+
+  openModal('admin-modal');
+}
+
+document.getElementById('change-password-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!currentSiteForAdmin) return;
+
+  const newPassword = document.getElementById('admin-new-password').value;
+  const confirmPassword = document.getElementById('admin-confirm-password').value;
+
+  if (newPassword !== confirmPassword) {
+    alert('Mật khẩu xác nhận không trùng khớp!');
+    return;
+  }
+
+  const passwordRegex = /^(?=.*[A-Z])(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+  if (!passwordRegex.test(newPassword)) {
+    alert('Mật khẩu mới phải có tối thiểu 8 ký tự, chứa ít nhất 1 chữ hoa (A-Z) và 1 ký tự đặc biệt.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-submit-change-pw');
+  btn.disabled = true;
+  btn.textContent = 'Đang đổi mật khẩu…';
+
+  try {
+    const res = await fetch(`/api/sites/${currentSiteForAdmin}/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newPassword })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Lỗi không xác định');
+
+    // Update in local state
+    const site = allSites.find(s => s.name === currentSiteForAdmin);
+    if (site) {
+      site.adminPassword = newPassword;
+    }
+    
+    alert('✅ Đổi mật khẩu Admin thành công!');
+    closeModal('admin-modal');
+    renderSites();
+  } catch (err) {
+    alert('Lỗi: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Lưu mật khẩu mới';
+  }
+});
+
+// ============================================================
 // MODAL HELPERS
 // ============================================================
 function openModal(id) {
@@ -1107,6 +1213,8 @@ function bindEvents() {
     'btn-close-creds':    'credentials-modal',
     'btn-cancel-creds':   'credentials-modal',
     'btn-close-profile':  'profile-modal',
+    'btn-close-admin-modal': 'admin-modal',
+    'btn-cancel-change-pw': 'admin-modal',
   };
 
   for (const [btnId, modalId] of Object.entries(closes)) {

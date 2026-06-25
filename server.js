@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
+import crypto from 'crypto';
 
 
 const app = express();
@@ -25,6 +26,7 @@ const TEMPLATE_REPOS = {
   'ngo-quyen':   'https://github.com/tiensyk09/template-ngo-quyen.git',
   'korean-news': 'https://github.com/tiensyk09/template-korean-news.git',
   'commandcode': 'https://github.com/tiensyk09/template-commandcode.git',
+  'long-chau':    '',
 };
 
 // Local fallback nếu git clone thất bại
@@ -32,6 +34,7 @@ const TEMPLATE_LOCAL = {
   'ngo-quyen':   path.join(process.cwd(), 'templates', 'ngo-quyen'),
   'korean-news': path.join(process.cwd(), 'templates', 'korean-news'),
   'commandcode': path.join(process.cwd(), 'templates', 'commandcode'),
+  'long-chau':    path.join(process.cwd(), 'templates', 'long-chau'),
 };
 
 // Helper to construct environment variables for Cloudflare commands cleanly, preventing header conflicts
@@ -352,6 +355,7 @@ app.post('/api/sites', async (req, res) => {
       databaseId: '',
       databaseName: `${name}-db`,
       bucketName: `${name}-bucket`,
+      adminPassword: adminPassword || '',
       createdAt: new Date().toISOString(),
       cfProfileId: cfProfileId || null,
       accountId: accountId || '',
@@ -364,6 +368,7 @@ app.post('/api/sites', async (req, res) => {
     site.status = 'deploying';
     site.title = title || site.title || name;
     site.template = chosenTemplate;
+    if (adminPassword) site.adminPassword = adminPassword;
     if (cfProfileId) site.cfProfileId = cfProfileId;
     site.accountId = accountId || site.accountId || '';
     site.apiKey = apiKey || site.apiKey || '';
@@ -380,7 +385,7 @@ app.post('/api/sites', async (req, res) => {
     apiToken: site.apiToken || apiToken || '',
     accountId: site.accountId || accountId || '',
     title: site.title || title || name,
-    adminPassword: adminPassword || ''
+    adminPassword: site.adminPassword || adminPassword || ''
   }).catch(async (err) => {
     await writeLog(name, `\nDEPLOYMENT FAILED: ${err.message}\n`, true);
     const currentDb = await readDb();
@@ -445,6 +450,78 @@ app.delete('/api/sites/:name', async (req, res) => {
   await writeDb(db);
 
   res.json({ message: 'Site deleted successfully.' });
+});
+
+// Helper to hash password using Node.js crypto library matching PBKDF2 iterations
+function hashPasswordForTemplate(password, templateName) {
+  const iterations = templateName === 'ngo-quyen' ? 310000 : 10000;
+  const salt = crypto.randomBytes(16);
+  const derivedKey = crypto.pbkdf2Sync(password, salt, iterations, 32, 'sha256');
+  const saltHex = salt.toString('hex');
+  const hashHex = derivedKey.toString('hex');
+  return `pbkdf2:${saltHex}:${hashHex}`;
+}
+
+// 5. Change site admin password directly in D1 and db.json
+app.post('/api/sites/:name/change-password', async (req, res) => {
+  const { name } = req.params;
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ error: 'Mật khẩu phải có tối thiểu 8 ký tự.' });
+  }
+
+  const db = await readDb();
+  const site = db.sites.find(s => s.name === name);
+  if (!site) {
+    return res.status(404).json({ error: 'Site not found.' });
+  }
+
+  // Resolve Cloudflare credentials
+  let creds = {
+    accountId: site.accountId,
+    apiKey: site.apiKey,
+    email: site.email,
+    apiToken: site.apiToken
+  };
+
+  if (site.cfProfileId) {
+    const profile = (db.cfProfiles || []).find(p => p.id === site.cfProfileId);
+    if (profile) {
+      creds = {
+        accountId: profile.accountId,
+        apiKey: profile.apiKey || '',
+        email: profile.email || '',
+        apiToken: profile.apiToken || ''
+      };
+    }
+  }
+
+  if (!creds.accountId) {
+    return res.status(400).json({ error: 'Cấu hình Cloudflare Account ID không tồn tại cho trang này.' });
+  }
+
+  try {
+    const hashed = hashPasswordForTemplate(newPassword, site.template);
+    const envOptions = {
+      env: getCloudflareEnv(creds)
+    };
+
+    // Run remote D1 execute command to update password
+    const dbName = `${name}-db`;
+    await runCommand('npx', [
+      'wrangler', 'd1', 'execute', dbName, '--remote',
+      `--command=UPDATE users SET password = '${hashed}' WHERE username = 'admin'`
+    ], envOptions, name);
+
+    // Save password locally in db.json for retrieval
+    site.adminPassword = newPassword;
+    await writeDb(db);
+
+    res.json({ success: true, message: 'Đổi mật khẩu Admin thành công!' });
+  } catch (err) {
+    res.status(500).json({ error: `Lỗi đổi mật khẩu: ${err.message}` });
+  }
 });
 
 // Cloudflare cleanup handler
@@ -1310,6 +1387,14 @@ app.get('/api/templates', async (req, res) => {
       thumbnail: '/themes/korean-news.png',
       tags: ['Tiếng Hàn', 'Tin tức', 'Portal'],
       color: '#c0392b'
+    },
+    {
+      id: 'long-chau',
+      name: 'Nhà thuốc Long Châu',
+      description: 'Giao diện thương mại điện tử nhà thuốc chuyên nghiệp, đầy đủ danh mục nổi bật, sản phẩm Flash Sale, kiểm tra sức khỏe và góc sức khỏe.',
+      thumbnail: '/themes/long-chau.png',
+      tags: ['Tiếng Việt', 'Dược phẩm', 'Bán lẻ'],
+      color: '#005bcd'
     }
   ];
   res.json(templates);
