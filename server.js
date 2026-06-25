@@ -584,7 +584,9 @@ async function deploySite(siteName, creds) {
   const bucketName = `${siteName}-bucket`;
 
   const env = getCloudflareEnv(creds);
-  env.NODE_OPTIONS = `--require ${path.join(process.cwd(), 'patch-symlink.cjs').replace(/\\/g, '/')}`;
+  if (process.platform === 'win32') {
+    env.NODE_OPTIONS = `--require ${path.join(process.cwd(), 'patch-symlink.cjs').replace(/\\/g, '/')}`;
+  }
 
   const envOptions = { cwd: sitePath, env };
 
