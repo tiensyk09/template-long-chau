@@ -1,0 +1,15 @@
+services:
+  website-manager:
+    build: .
+    container_name: website-manager
+    ports:
+      - "3005:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - PORT=3000
+      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
+      - CLOUDFLARE_API_KEY=${CLOUDFLARE_API_KEY}
+      - CLOUDFLARE_EMAIL=${CLOUDFLARE_EMAIL}
+    restart: always

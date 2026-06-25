@@ -26,7 +26,7 @@ const TEMPLATE_REPOS = {
   'ngo-quyen':   'https://github.com/tiensyk09/template-ngo-quyen.git',
   'korean-news': 'https://github.com/tiensyk09/template-korean-news.git',
   'commandcode': 'https://github.com/tiensyk09/template-commandcode.git',
-  'long-chau':    '',
+  'long-chau':   'https://github.com/tiensyk09/template-long-chau.git',
 };
 
 // Local fallback nếu git clone thất bại

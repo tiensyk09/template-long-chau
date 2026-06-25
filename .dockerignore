@@ -1,0 +1,10 @@
+node_modules
+.git
+.gitignore
+.env
+sites
+logs
+templates/**/node_modules
+templates/**/.next
+templates/**/out
+patch-symlink.cjs
