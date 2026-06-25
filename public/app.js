@@ -242,14 +242,30 @@ function renderSites() {
 
   emptyState.style.display = 'none';
 
-  // Remove old cards
+  // Remove cards that are no longer in the filtered list
+  const filteredNames = new Set(filtered.map(s => s.name));
   Array.from(grid.children).forEach(el => {
-    if (!el.classList.contains('empty-state')) el.remove();
+    if (el.classList.contains('empty-state')) return;
+    const name = el.id.replace('site-card-', '');
+    if (!filteredNames.has(name)) {
+      el.remove();
+    }
   });
 
+  // Add new cards or update changed ones in-place to avoid flickering
   filtered.forEach(site => {
-    const card = createSiteCard(site);
-    grid.appendChild(card);
+    const existing = document.getElementById(`site-card-${site.name}`);
+    if (existing) {
+      const currentStatus = existing.getAttribute('data-status');
+      const currentUrl = existing.getAttribute('data-url');
+      if (currentStatus !== site.status || currentUrl !== (site.deployUrl || '')) {
+        const card = createSiteCard(site);
+        grid.replaceChild(card, existing);
+      }
+    } else {
+      const card = createSiteCard(site);
+      grid.appendChild(card);
+    }
   });
 }
 
@@ -257,6 +273,8 @@ function createSiteCard(site) {
   const el = document.createElement('div');
   el.className = 'site-card';
   el.id = `site-card-${site.name}`;
+  el.setAttribute('data-status', site.status);
+  el.setAttribute('data-url', site.deployUrl || '');
 
   const statusClass = {
     active: 'status-active',
