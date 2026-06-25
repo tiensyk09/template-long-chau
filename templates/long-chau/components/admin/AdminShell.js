@@ -8,6 +8,9 @@ const navItems = [
   { href: '/admin', label: 'Dashboard', icon: '📊' },
   { href: '/admin/profile', label: 'Profile Settings', icon: '👤' },
   { section: 'MANAGEMENT' },
+  { href: '/admin/products', label: 'Products / Catalog', icon: '🛍️' },
+  { href: '/admin/orders', label: 'Orders / Checkout', icon: '📦' },
+  { href: '/admin/coupons', label: 'Coupons / Discounts', icon: '🎟️' },
   { href: '/admin/posts', label: 'Changelog / Posts', icon: '📝' },
   { href: '/admin/files', label: 'Files / Media', icon: '📁' },
   { href: '/admin/members', label: 'Member Directory', icon: '👥' },
@@ -99,6 +102,9 @@ export default function AdminShell({ children, title = 'Dashboard' }) {
               if (item.section === 'MANAGEMENT' && !isStaff) return null;
               return <div key={i} className="sidebar-section-label">{item.section}</div>;
             }
+            if (item.href === '/admin/products' && !isStaff) return null;
+            if (item.href === '/admin/orders' && !isStaff) return null;
+            if (item.href === '/admin/coupons' && !isStaff) return null;
             if (item.href === '/admin/posts' && !isStaff) return null;
             if (item.href === '/admin/files' && !isStaff) return null;
             if (item.href === '/admin/members' && !isStaff) return null;

@@ -24,7 +24,7 @@ export default function AdminDashboardPage() {
         
         // If staff, load stats
         if (userData.user.role === 'admin' || userData.user.role === 'mod') {
-          const statsRes = await fetch('/api/admin/stats');
+          const statsRes = await fetch('/api/admin/dashboard');
           if (statsRes.ok) {
             const statsData = await statsRes.json();
             setStats(statsData);
@@ -100,39 +100,22 @@ export default function AdminDashboardPage() {
                 <span className="tier-tag" style={{ fontSize: '12px', padding: '4px 8px', marginTop: '4px', display: 'inline-block' }}>{user?.tier}</span>
               </div>
             </div>
-
-            <div style={{ borderTop: '1px solid var(--admin-border)', paddingTop: '20px', marginTop: '10px' }}>
-              {user?.tier === 'Free' && (
-                <div style={{ padding: '20px', background: 'rgba(139, 92, 246, 0.05)', border: '1px solid rgba(139, 92, 246, 0.25)', borderRadius: '12px' }}>
-                  <h4 style={{ color: '#c084fc', marginBottom: '8px' }}>⚡ Upgrade to Pro for just $1/mo</h4>
-                  <p style={{ color: 'var(--admin-muted)', fontSize: '14px', lineHeight: '1.6' }}>
-                    Unlock full taste-1 meta-reinforcement learning, shared git registries (`npx taste push`), unlimited agent compute time, and custom prompts configuration storage.
-                  </p>
-                  <button className="btn btn-primary" style={{ marginTop: '16px' }} onClick={() => alert('Subscription integration coming soon!')}>Upgrade to Pro</button>
-                </div>
-              )}
-              {user?.tier === 'Pro' && (
-                <div style={{ padding: '20px', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '12px' }}>
-                  <h4 style={{ color: '#34d399', marginBottom: '8px' }}>🎉 Pro Taste Plan Active</h4>
-                  <p style={{ color: 'var(--admin-muted)', fontSize: '14px', lineHeight: '1.6' }}>
-                    Thank you for subscribing! Your CLI client has full access to taste-1 model endpoints. Run <code>npm i -g command-code</code> and authenticate with your account credentials.
-                  </p>
-                </div>
-              )}
-              {user?.tier === 'Enterprise' && (
-                <div style={{ padding: '20px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--admin-border)', borderRadius: '12px' }}>
-                  <h4 style={{ color: '#fff', marginBottom: '8px' }}>🏢 Enterprise Plan Active</h4>
-                  <p style={{ color: 'var(--admin-muted)', fontSize: '14px', lineHeight: '1.6' }}>
-                    Dedicated compute resources, private registries, and SLA guarantees are fully unlocked for your company team members.
-                  </p>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </AdminShell>
     );
   }
+
+  const getStatusLabel = (status) => {
+    const map = {
+      pending: { text: 'Chờ xác nhận', class: 'badge-yellow' },
+      confirmed: { text: 'Đã xác nhận', class: 'badge-blue' },
+      shipping: { text: 'Đang giao', class: 'badge-blue' },
+      completed: { text: 'Đã giao xong', class: 'badge-green' },
+      cancelled: { text: 'Đã hủy', class: 'badge-red' }
+    };
+    return map[status] || { text: status, class: '' };
+  };
 
   // Staff (Admins and Mods) dashboard stats
   return (
@@ -151,91 +134,111 @@ export default function AdminDashboardPage() {
         <>
           <div className="stat-grid-admin">
             <div className="stat-card-admin">
-              <div className="stat-card-icon-admin purple">📝</div>
+              <div className="stat-card-icon-admin purple">💵</div>
               <div className="stat-card-info-admin">
-                <div className="stat-card-val-admin">{stats?.posts?.total || 0}</div>
-                <div className="stat-card-lbl-admin">Changelog Posts</div>
-                <div className="stat-card-sub-admin">{stats?.posts?.published || 0} active · {stats?.posts?.draft || 0} drafts</div>
+                <div className="stat-card-val-admin">{(stats?.revenue?.month || 0).toLocaleString('vi-VN')}đ</div>
+                <div className="stat-card-lbl-admin">Doanh thu 30 ngày</div>
+                <div className="stat-card-sub-admin">Hôm nay: {(stats?.revenue?.today || 0).toLocaleString('vi-VN')}đ</div>
               </div>
             </div>
 
             <div className="stat-card-admin">
-              <div className="stat-card-icon-admin green">✉️</div>
+              <div className="stat-card-icon-admin green">📦</div>
               <div className="stat-card-info-admin">
-                <div className="stat-card-val-admin">{stats?.newsletter?.total || 0}</div>
-                <div className="stat-card-lbl-admin">Newsletter Subscribers</div>
-                <div className="stat-card-sub-admin">Subscribed via forms</div>
+                <div className="stat-card-val-admin">{stats?.orders?.total || 0}</div>
+                <div className="stat-card-lbl-admin">Tổng đơn hàng</div>
+                <div className="stat-card-sub-admin">Chờ xử lý: <strong style={{ color: 'var(--lc-orange, #f57c00)' }}>{stats?.orders?.pending || 0}</strong> đơn</div>
               </div>
             </div>
 
             <div className="stat-card-admin">
-              <div className="stat-card-icon-admin danger">👥</div>
+              <div className="stat-card-icon-admin danger">💊</div>
               <div className="stat-card-info-admin">
-                <div className="stat-card-val-admin">{stats?.members?.total || 0}</div>
-                <div className="stat-card-lbl-admin">Registered Members</div>
-                <div className="stat-card-sub-admin">{stats?.members?.pro || 0} Pro · {stats?.members?.enterprise || 0} Enterprise</div>
+                <div className="stat-card-val-admin">{stats?.products?.total || 0}</div>
+                <div className="stat-card-lbl-admin">Sản phẩm đang bán</div>
+                <div className="stat-card-sub-admin">Sắp hết hàng (tồn &lt;= 5): <strong style={{ color: '#ff4d4f' }}>{stats?.products?.lowStock || 0}</strong></div>
               </div>
             </div>
           </div>
 
           <div className="grid-split-admin">
-            {/* Recent Posts */}
+            {/* Recent Orders */}
             <div className="adm-card" style={{ marginBottom: 0 }}>
               <div className="adm-card-header">
-                <div className="adm-card-title">🕐 Recent Updates / Changelogs</div>
-                <Link href="/admin/posts" className="btn btn-secondary btn-sm">Manage All</Link>
+                <div className="adm-card-title">🕐 Đơn hàng mới nhất</div>
+                <Link href="/admin/orders" className="btn btn-secondary btn-sm">Xem tất cả</Link>
               </div>
               <div className="adm-card-body" style={{ padding: 0 }}>
-                {stats?.recentPosts?.length === 0 ? (
+                {stats?.recentOrders?.length === 0 ? (
                   <div className="adm-empty">
-                    <div className="adm-empty-text">No posts available</div>
+                    <div className="adm-empty-text">Chưa có đơn hàng nào</div>
                   </div>
                 ) : (
                   <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                    {stats?.recentPosts?.map((p, i) => (
-                      <li key={p.id} style={{
-                        padding: '16px 24px',
-                        borderBottom: i < stats.recentPosts.length - 1 ? '1px solid var(--admin-border)' : 'none',
-                        display: 'flex', alignItems: 'center', justifyItems: 'center', gap: '16px'
-                      }}>
-                        <div style={{ flex: 1, overflow: 'hidden' }}>
-                          <div style={{ fontWeight: 600, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {p.title}
+                    {stats?.recentOrders?.map((ord, i) => {
+                      const statusInfo = getStatusLabel(ord.status);
+                      return (
+                        <li key={ord.order_code} style={{
+                          padding: '16px 24px',
+                          borderBottom: i < stats.recentOrders.length - 1 ? '1px solid var(--admin-border)' : 'none',
+                          display: 'flex', alignItems: 'center', justifyItems: 'center', gap: '16px'
+                        }}>
+                          <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <div style={{ fontWeight: 600, fontSize: '14px' }}>
+                              {ord.order_code} — {ord.customer_name}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--admin-muted)', marginTop: '4px' }}>
+                              {new Date(ord.created_at).toLocaleString('vi-VN')} · <strong style={{ color: 'var(--admin-primary)' }}>{ord.total.toLocaleString('vi-VN')}đ</strong>
+                            </div>
                           </div>
-                          <div style={{ fontSize: '11px', color: 'var(--admin-muted)', marginTop: '4px' }}>
-                            {new Date(p.created_at).toLocaleDateString()} · {p.views} views
-                          </div>
-                        </div>
-                        <span className={`badge ${p.status === 'published' ? 'badge-green' : 'badge-yellow'}`}>
-                          {p.status === 'published' ? 'Published' : 'Draft'}
-                        </span>
-                      </li>
-                    ))}
+                          <span className={`badge ${statusInfo.class}`}>
+                            {statusInfo.text}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
             </div>
 
-            {/* Recent Subscribers */}
+            {/* Top Selling Products */}
             <div className="adm-card" style={{ marginBottom: 0 }}>
               <div className="adm-card-header">
-                <div className="adm-card-title">📩 Recent Subscribers</div>
+                <div className="adm-card-title">🔥 Top sản phẩm bán chạy</div>
+                <Link href="/admin/products" className="btn btn-secondary btn-sm">Quản lý sản phẩm</Link>
               </div>
               <div className="adm-card-body" style={{ padding: 0 }}>
-                {stats?.recentSignups?.length === 0 ? (
+                {stats?.topProducts?.length === 0 ? (
                   <div className="adm-empty">
-                    <div className="adm-empty-text">No subscribers yet</div>
+                    <div className="adm-empty-text">Chưa có sản phẩm nào được bán</div>
                   </div>
                 ) : (
                   <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                    {stats?.recentSignups?.map((s, i) => (
-                      <li key={s.id} style={{
-                        padding: '16px 24px',
-                        borderBottom: i < stats.recentSignups.length - 1 ? '1px solid var(--admin-border)' : 'none',
-                        display: 'flex', flexDirection: 'column'
+                    {stats?.topProducts?.map((p, i) => (
+                      <li key={p.id} style={{
+                        padding: '12px 24px',
+                        borderBottom: i < stats.topProducts.length - 1 ? '1px solid var(--admin-border)' : 'none',
+                        display: 'flex', alignItems: 'center', gap: '12px'
                       }}>
-                        <span style={{ fontSize: '14px', fontWeight: '600' }}>{s.email}</span>
-                        <span style={{ fontSize: '11px', color: 'var(--admin-muted)', marginTop: '4px' }}>Joined: {new Date(s.created_at).toLocaleString()}</span>
+                        <img
+                          src={p.thumbnail || '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png'}
+                          alt={p.name}
+                          style={{ width: '36px', height: '36px', objectFit: 'contain', background: '#fff', border: '1px solid #3f3f46', borderRadius: '4px' }}
+                          onError={(e) => { e.target.src = 'https://picsum.photos/36/36'; }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: '13.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {p.name}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--admin-muted)', marginTop: '2px' }}>
+                            Giá bán: {p.price.toLocaleString('vi-VN')}đ
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <span style={{ fontSize: '12px', color: 'var(--admin-muted)' }}>Đã bán:</span>
+                          <div style={{ fontWeight: 700, fontSize: '14px', color: '#4ade80' }}>{p.sold_count || 0}</div>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -247,14 +250,13 @@ export default function AdminDashboardPage() {
           {/* Quick Actions */}
           <div className="adm-card">
             <div className="adm-card-header">
-              <div className="adm-card-title">⚡ Quick Actions</div>
+              <div className="adm-card-title">⚡ Thao tác nhanh</div>
             </div>
             <div className="adm-card-body" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Link href="/admin/posts/new" className="btn btn-primary">📝 Create Changelog</Link>
-              {user.role === 'admin' && (
-                <Link href="/admin/members" className="btn btn-secondary">👥 Manage Members</Link>
-              )}
-              <button className="btn btn-secondary" onClick={initDb}>🔄 Re-seed Schema</button>
+              <Link href="/admin/products" className="btn btn-primary">🛍️ Quản lý sản phẩm</Link>
+              <Link href="/admin/orders" className="btn btn-secondary">📦 Quản lý đơn hàng</Link>
+              <Link href="/admin/coupons" className="btn btn-secondary">🎟️ Quản lý Coupon</Link>
+              <button className="btn btn-secondary" onClick={initDb}>🔄 Khởi tạo lại Dữ liệu mẫu (Seed)</button>
             </div>
           </div>
         </>

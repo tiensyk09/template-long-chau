@@ -27,6 +27,8 @@ export default function BlockRenderer({ blocks = [] }) {
               return <BrandsBlock key={block.id} configs={block.configs} />;
             case 'html':
               return <HtmlBlock key={block.id} configs={block.configs} />;
+            case 'products':
+              return <ProductsBlock key={block.id} configs={block.configs} />;
             default:
               return null;
           }
@@ -612,6 +614,132 @@ function HtmlBlock({ configs = {} }) {
     <div className="lc-section-bg-white">
       <div className="lc-section">
         <div dangerouslySetInnerHTML={{ __html: configs.html || '' }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── 9. PRODUCTS BLOCK ────────────────────────────────────────
+import { useCart } from '@/components/CartContext';
+
+function ProductsBlock({ configs = {} }) {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { addItem } = useCart();
+  const [addingId, setAddingId] = useState(null);
+
+  useEffect(() => {
+    const limit = configs.limit || 8;
+    const category = configs.category || '';
+    const featured = configs.featured || '';
+    const flashSale = configs.flash_sale || '';
+    
+    fetch(`/api/products?limit=${limit}&category=${category}&featured=${featured}&flash_sale=${flashSale}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.products) {
+          setProducts(data.products);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [configs.limit, configs.category, configs.featured, configs.flash_sale]);
+
+  const handleAddToCart = (product) => {
+    setAddingId(product.id);
+    addItem(product, null, 1);
+    setTimeout(() => {
+      setAddingId(null);
+    }, 800);
+  };
+
+  return (
+    <div className="lc-section-bg-white">
+      <div className="lc-section">
+        <div className="lc-section-header">
+          <div className="lc-section-title-row">
+            <span className="lc-section-icon">📦</span>
+            <h2 className="lc-section-title">{configs.title || 'Sản phẩm nổi bật'}</h2>
+          </div>
+          <Link href="/products" className="lc-section-link">Xem tất cả ›</Link>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--lc-muted)' }}>Đang tải sản phẩm...</div>
+        ) : products.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--lc-muted)' }}>Không có sản phẩm nào.</div>
+        ) : (
+          <div className="lc-product-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', margin: 0 }}>
+            {products.map((prod, idx) => {
+              const discountPercent = prod.original_price
+                ? Math.round(((prod.original_price - prod.price) / prod.original_price) * 100)
+                : 0;
+
+              return (
+                <div className="lc-product-card" key={prod.id} style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', overflow: 'hidden' }}>
+                  {discountPercent > 0 && <div className="lc-product-discount" style={{ zIndex: 2 }}>-{discountPercent}%</div>}
+                  <Link href={`/products/${prod.slug}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block', padding: '16px' }}>
+                    <div className="lc-product-img" style={{ height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
+                      <img
+                        src={prod.thumbnail || '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png'}
+                        alt={prod.name}
+                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                        onError={(e) => {
+                          e.target.src = `https://picsum.photos/160/160?random=${idx}`;
+                        }}
+                      />
+                    </div>
+                    <div style={{ minHeight: '84px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <div>
+                        {prod.brand && (
+                          <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--lc-blue)', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                            {prod.brand}
+                          </span>
+                        )}
+                        <h4 style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--lc-text)', margin: 0, lineBreak: 'anywhere', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', height: '36px', lineHeight: '1.4' }}>
+                          {prod.name}
+                        </h4>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                        <span style={{ fontSize: '14.5px', fontWeight: 700, color: 'var(--lc-blue-dark)' }}>
+                          {prod.price.toLocaleString('vi-VN')}đ
+                        </span>
+                        <span style={{ fontSize: '11px', color: 'var(--lc-muted)' }}>
+                          / {prod.unit || 'Hộp'}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                  <div style={{ padding: '0 16px 16px', marginTop: 'auto' }}>
+                    <button
+                      onClick={() => handleAddToCart(prod)}
+                      disabled={addingId === prod.id}
+                      className="lc-btn-chon-mua"
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        borderRadius: '20px',
+                        border: 'none',
+                        background: addingId === prod.id ? 'var(--lc-green, #2e7d32)' : 'var(--lc-blue)',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '12.5px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {addingId === prod.id ? '✓ Đã thêm' : 'Chọn mua'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

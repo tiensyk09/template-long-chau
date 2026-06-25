@@ -135,6 +135,115 @@ CREATE TABLE IF NOT EXISTS download_tokens (
   expires_at INTEGER NOT NULL
 );
 
+-- E-COMMERCE TABLES
+
+CREATE TABLE IF NOT EXISTS shop_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  parent_id INTEGER,
+  icon TEXT,
+  image TEXT,
+  description TEXT,
+  is_active INTEGER DEFAULT 1,
+  sort_order INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS products (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category_id INTEGER,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  short_description TEXT,
+  description TEXT,
+  price REAL NOT NULL DEFAULT 0,
+  original_price REAL,
+  thumbnail TEXT,
+  images TEXT,
+  brand TEXT,
+  origin TEXT,
+  unit TEXT DEFAULT 'Hộp',
+  stock INTEGER DEFAULT 0,
+  sold_count INTEGER DEFAULT 0,
+  view_count INTEGER DEFAULT 0,
+  rating REAL DEFAULT 0,
+  status TEXT DEFAULT 'active',
+  is_featured INTEGER DEFAULT 0,
+  is_flash_sale INTEGER DEFAULT 0,
+  flash_sale_price REAL,
+  flash_sale_end TEXT,
+  tags TEXT,
+  meta_title TEXT,
+  meta_description TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (category_id) REFERENCES shop_categories(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS product_variants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  price REAL NOT NULL,
+  stock INTEGER DEFAULT 0,
+  sort_order INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS product_reviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  order_id INTEGER,
+  reviewer_name TEXT NOT NULL,
+  reviewer_id INTEGER,
+  rating INTEGER NOT NULL DEFAULT 5,
+  comment TEXT,
+  is_verified INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_code TEXT NOT NULL UNIQUE,
+  user_id INTEGER,
+  customer_name TEXT NOT NULL,
+  customer_phone TEXT NOT NULL,
+  customer_email TEXT,
+  shipping_address TEXT NOT NULL,
+  shipping_province TEXT,
+  shipping_note TEXT,
+  items TEXT NOT NULL,
+  subtotal REAL NOT NULL DEFAULT 0,
+  discount_amount REAL DEFAULT 0,
+  shipping_fee REAL DEFAULT 0,
+  total REAL NOT NULL DEFAULT 0,
+  coupon_code TEXT,
+  payment_method TEXT DEFAULT 'cod',
+  payment_status TEXT DEFAULT 'pending',
+  status TEXT DEFAULT 'pending',
+  admin_note TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS coupons (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  discount_type TEXT NOT NULL DEFAULT 'percent',
+  discount_value REAL NOT NULL,
+  min_order REAL DEFAULT 0,
+  max_discount REAL,
+  usage_limit INTEGER,
+  usage_count INTEGER DEFAULT 0,
+  expires_at TEXT,
+  is_active INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 
 
 

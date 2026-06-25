@@ -132,16 +132,133 @@ export async function initDatabase() {
     )
   `);
 
-  // Stored files table (fallback for hosting uploads in database when filesystem is read-only)
+
+  // ─── E-COMMERCE TABLES ───────────────────────────────────────
+
+  // Shop Categories (danh mục sản phẩm)
   await query(`
-    CREATE TABLE IF NOT EXISTS stored_files (
-      \`key\` VARCHAR(255) PRIMARY KEY,
-      content LONGTEXT NOT NULL,
-      mime_type VARCHAR(100) NOT NULL,
-      created_at VARCHAR(100) NOT NULL DEFAULT (datetime('now'))
+    CREATE TABLE IF NOT EXISTS shop_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      parent_id INTEGER,
+      icon TEXT,
+      image TEXT,
+      description TEXT,
+      is_active INTEGER DEFAULT 1,
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
     )
   `);
 
+  // Products (sản phẩm)
+  await query(`
+    CREATE TABLE IF NOT EXISTS products (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category_id INTEGER,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      short_description TEXT,
+      description TEXT,
+      price REAL NOT NULL DEFAULT 0,
+      original_price REAL,
+      thumbnail TEXT,
+      images TEXT,
+      brand TEXT,
+      origin TEXT,
+      unit TEXT DEFAULT 'Hộp',
+      stock INTEGER DEFAULT 0,
+      sold_count INTEGER DEFAULT 0,
+      view_count INTEGER DEFAULT 0,
+      rating REAL DEFAULT 0,
+      status TEXT DEFAULT 'active',
+      is_featured INTEGER DEFAULT 0,
+      is_flash_sale INTEGER DEFAULT 0,
+      flash_sale_price REAL,
+      flash_sale_end TEXT,
+      tags TEXT,
+      meta_title TEXT,
+      meta_description TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (category_id) REFERENCES shop_categories(id) ON DELETE SET NULL
+    )
+  `);
+
+  // Product Variants (biến thể sản phẩm: Hộp, Vỉ, Chai...)
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_variants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      price REAL NOT NULL,
+      stock INTEGER DEFAULT 0,
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Product Reviews (đánh giá)
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      order_id INTEGER,
+      reviewer_name TEXT NOT NULL,
+      reviewer_id INTEGER,
+      rating INTEGER NOT NULL DEFAULT 5,
+      comment TEXT,
+      is_verified INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Orders (đơn hàng)
+  await query(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_code TEXT NOT NULL UNIQUE,
+      user_id INTEGER,
+      customer_name TEXT NOT NULL,
+      customer_phone TEXT NOT NULL,
+      customer_email TEXT,
+      shipping_address TEXT NOT NULL,
+      shipping_province TEXT,
+      shipping_note TEXT,
+      items TEXT NOT NULL,
+      subtotal REAL NOT NULL DEFAULT 0,
+      discount_amount REAL DEFAULT 0,
+      shipping_fee REAL DEFAULT 0,
+      total REAL NOT NULL DEFAULT 0,
+      coupon_code TEXT,
+      payment_method TEXT DEFAULT 'cod',
+      payment_status TEXT DEFAULT 'pending',
+      status TEXT DEFAULT 'pending',
+      admin_note TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
+
+  // Coupons (mã giảm giá)
+  await query(`
+    CREATE TABLE IF NOT EXISTS coupons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      discount_type TEXT NOT NULL DEFAULT 'percent',
+      discount_value REAL NOT NULL,
+      min_order REAL DEFAULT 0,
+      max_discount REAL,
+      usage_limit INTEGER,
+      usage_count INTEGER DEFAULT 0,
+      expires_at TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
 
   // Alter tables to add SEO columns dynamically if they do not exist
   const addColumns = [
@@ -164,6 +281,7 @@ export async function initDatabase() {
 
   console.log('✅ Database tables created and migrated');
 }
+
 
 export async function seedData(adminPassword, force = false) {
   const passwordToSeed = adminPassword || 'admin123';
@@ -430,6 +548,86 @@ export async function seedData(adminPassword, force = false) {
     }
   } catch (err) {
     console.error('Failed to seed default file categories:', err);
+  }
+
+  // Seed E-Commerce data (shop categories + sample products + coupon)
+  try {
+    const catCount = await query('SELECT COUNT(*) as cnt FROM shop_categories');
+    if (catCount[0].cnt === 0) {
+      const defaultCats = [
+        { name: 'Thực phẩm chức năng', slug: 'thuc-pham-chuc-nang', icon: '💊', sort_order: 1 },
+        { name: 'Dược mỹ phẩm', slug: 'duoc-my-pham', icon: '🧴', sort_order: 2 },
+        { name: 'Thuốc kê đơn', slug: 'thuoc-ke-don', icon: '💉', sort_order: 3 },
+        { name: 'Thiết bị y tế', slug: 'thiet-bi-y-te', icon: '🩺', sort_order: 4 },
+        { name: 'Chăm sóc cá nhân', slug: 'cham-soc-ca-nhan', icon: '🪥', sort_order: 5 },
+        { name: 'Sản phẩm cho mẹ & bé', slug: 'me-va-be', icon: '🍼', sort_order: 6 },
+        { name: 'Vitamin & Khoáng chất', slug: 'vitamin-khoang-chat', icon: '🌟', sort_order: 7 },
+        { name: 'Sữa dinh dưỡng', slug: 'sua-dinh-duong', icon: '🥛', sort_order: 8 },
+      ];
+      for (const c of defaultCats) {
+        await query(
+          'INSERT OR IGNORE INTO shop_categories (name, slug, icon, sort_order) VALUES (?, ?, ?, ?)',
+          [c.name, c.slug, c.icon, c.sort_order]
+        );
+      }
+      console.log('🛍️ Default shop categories seeded');
+    }
+
+    const prodCount = await query('SELECT COUNT(*) as cnt FROM products');
+    if (prodCount[0].cnt === 0) {
+      const cat1 = await query("SELECT id FROM shop_categories WHERE slug = 'thuc-pham-chuc-nang'");
+      const cat2 = await query("SELECT id FROM shop_categories WHERE slug = 'vitamin-khoang-chat'");
+      const cat3 = await query("SELECT id FROM shop_categories WHERE slug = 'sua-dinh-duong'");
+      const catId1 = cat1[0]?.id || null;
+      const catId2 = cat2[0]?.id || null;
+      const catId3 = cat3[0]?.id || null;
+
+      const sampleProducts = [
+        { category_id: catId1, name: 'Viên uống Vitamin C 1000mg Puritan\'s Pride', slug: 'vitamin-c-1000mg-puritans-pride', short_description: 'Tăng cường miễn dịch, chống oxy hóa, sáng da', price: 199000, original_price: 280000, thumbnail: '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png', brand: 'Puritan\'s Pride', origin: 'Hoa Kỳ', unit: 'Lốc', stock: 150, is_featured: 1, is_flash_sale: 1, flash_sale_price: 149000 },
+        { category_id: catId2, name: 'Omega 3 Fish Oil 1000mg Kirkland Signature', slug: 'omega-3-fish-oil-kirkland', short_description: 'Bổ tim mạch, não bộ, thị giác, chống viêm', price: 450000, original_price: 580000, thumbnail: '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png', brand: 'Kirkland Signature', origin: 'Hoa Kỳ', unit: 'Hộp', stock: 80, is_featured: 1 },
+        { category_id: catId3, name: 'Sữa Ensure Gold Vanilla 900g Abbott', slug: 'sua-ensure-gold-vanilla-900g', short_description: 'Tăng cường sức khỏe cơ bắp, miễn dịch cho người lớn', price: 435000, original_price: 520000, thumbnail: '/images/Sua_d4a041e21d.png', brand: 'Abbott', origin: 'Hoa Kỳ', unit: 'Hộp', stock: 60, is_featured: 1, is_flash_sale: 1, flash_sale_price: 385000 },
+        { category_id: catId2, name: 'Brauer Baby & Kids Ultra Pure DHA 60 Viên', slug: 'brauer-baby-dha-60v', short_description: 'Hỗ trợ phát triển não bộ và thị lực cho trẻ', price: 486800, original_price: 580000, thumbnail: '/images/Vien_ho_tro_phat_trien_nao_bo_suc_khoe_cho_mat_Brauer_Baby_and_Kids_Ultra_Pure_DHA_00033687_79d080f5b6.png', brand: 'Brauer', origin: 'Úc', unit: 'Hộp', stock: 45, is_featured: 1 },
+        { category_id: catId1, name: 'New Nordic Skin Care Pigment Clear 60 Viên', slug: 'new-nordic-skin-care-pigment-clear', short_description: 'Giảm vết thâm, sạm, tàn nhang, làm sáng da', price: 500000, original_price: 650000, thumbnail: '/images/vien_uong_giam_vet_tham_sam_tan_nhang_giup_da_sang_min_skin_care_pigment_clear_60v_new_nordic_00011057_2_d86c2004d6.jpg', brand: 'New Nordic', origin: 'Hàn Quốc', unit: 'Hộp', stock: 30 },
+        { category_id: catId2, name: 'Vitabiotics Feroglobin B12 30 Viên Nang', slug: 'vitabiotics-feroglobin-b12', short_description: 'Bổ sung sắt và vitamin B12, phòng thiếu máu', price: 180000, original_price: 220000, thumbnail: '/images/Vitabiotics_1_8d1424372d.png', brand: 'Vitabiotics', origin: 'Anh', unit: 'Hộp', stock: 70, is_featured: 1 },
+        { category_id: catId1, name: 'Glucerna Sữa Bột Dành Cho Người Đái Tháo Đường', slug: 'glucerna-sua-bot-dai-thao-duong', short_description: 'Hỗ trợ kiểm soát đường huyết, cân bằng dinh dưỡng', price: 922000, original_price: 1050000, thumbnail: '/images/Sua_d4a041e21d.png', brand: 'Abbott', origin: 'Hoa Kỳ', unit: 'Hộp', stock: 25, is_flash_sale: 1, flash_sale_price: 842000 },
+        { category_id: catId2, name: 'Vitamins For Life Super B-Complex 100 Viên', slug: 'vitamins-for-life-super-b-complex', short_description: 'Bổ sung đầy đủ 8 loại vitamin nhóm B cho cơ thể', price: 250000, original_price: 320000, thumbnail: '/images/Vitamins_For_Life_1_0783ec2683.png', brand: 'Vitamins For Life', origin: 'Hoa Kỳ', unit: 'Hộp', stock: 100, is_featured: 1 },
+      ];
+
+      for (const p of sampleProducts) {
+        try {
+          await query(
+            `INSERT OR IGNORE INTO products (category_id, name, slug, short_description, price, original_price, thumbnail, brand, origin, unit, stock, is_featured, is_flash_sale, flash_sale_price, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+            [p.category_id, p.name, p.slug, p.short_description, p.price, p.original_price || null, p.thumbnail || null, p.brand || null, p.origin || null, p.unit || 'Hộp', p.stock || 0, p.is_featured || 0, p.is_flash_sale || 0, p.flash_sale_price || null]
+          );
+          // Add variants for each product
+          const prod = await query('SELECT id FROM products WHERE slug = ?', [p.slug]);
+          if (prod.length > 0) {
+            const pid = prod[0].id;
+            const variantCount = await query('SELECT COUNT(*) as cnt FROM product_variants WHERE product_id = ?', [pid]);
+            if (variantCount[0].cnt === 0) {
+              await query('INSERT INTO product_variants (product_id, name, price, stock) VALUES (?, ?, ?, ?)', [pid, p.unit || 'Hộp', p.price, p.stock]);
+              if (p.unit === 'Lốc') {
+                await query('INSERT INTO product_variants (product_id, name, price, stock) VALUES (?, ?, ?, ?)', [pid, 'Hộp', Math.round(p.price / 3), p.stock * 3]);
+              }
+            }
+          }
+        } catch (e) { /* ignore duplicate */ }
+      }
+      console.log('🛒 Sample products seeded');
+    }
+
+    // Seed a sample coupon
+    const couponExists = await query("SELECT id FROM coupons WHERE code = 'LONGCHAU10'");
+    if (couponExists.length === 0) {
+      await query(
+        "INSERT INTO coupons (code, discount_type, discount_value, min_order, max_discount, usage_limit, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)",
+        ['LONGCHAU10', 'percent', 10, 200000, 50000, 100]
+      );
+      console.log('🎟️ Sample coupon LONGCHAU10 seeded');
+    }
+
+  } catch (err) {
+    console.error('Failed to seed E-Commerce data:', err);
   }
 
   console.log('✅ Seed data complete');

@@ -1,25 +1,29 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useCart } from './CartContext';
 
 const QUICK_TAGS = ['Canxi', 'Omega 3', 'Kẽm', 'Sắt', 'Kem chống nắng', 'Thuốc nhỏ mắt', 'Sữa rửa mặt', 'Men vi sinh', 'Dung dịch vệ sinh', 'Vitamin C'];
 
 const NAV_ITEMS = [
-  { label: 'Thực phẩm chức năng', href: '/#categories' },
-  { label: 'Dược mỹ phẩm', href: '/#categories' },
-  { label: 'Thuốc', href: '/#categories' },
-  { label: 'Chăm sóc cá nhân', href: '/#categories' },
-  { label: 'Thiết bị y tế', href: '/#categories' },
+  { label: 'Thực phẩm chức năng', href: '/products?category=thuc-pham-chuc-nang' },
+  { label: 'Dược mỹ phẩm', href: '/products?category=duoc-my-pham' },
+  { label: 'Thuốc', href: '/products?category=thuoc-ke-don' },
+  { label: 'Chăm sóc cá nhân', href: '/products?category=cham-soc-ca-nhan' },
+  { label: 'Thiết bị y tế', href: '/products?category=thiet-bi-y-te' },
   { label: 'Tiêm chủng', href: '/#healthchecks' },
   { label: 'Bệnh & Góc sức khỏe', href: '/#posts' },
   { label: 'Hệ thống nhà thuốc', href: '/#stores' },
 ];
 
 export default function Header() {
+  const router = useRouter();
   const [logoText, setLogoText] = useState('LONG CHÂU');
   const [logoIcon, setLogoIcon] = useState('');
   const [links, setLinks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const { totalItems } = useCart();
 
   useEffect(() => {
     async function loadNavbarData() {
@@ -43,7 +47,7 @@ export default function Header() {
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      window.open(`https://nhathuoclongchau.com.vn/tim-kiem?q=${encodeURIComponent(searchQuery)}`, '_blank');
+      router.push(`/products?q=${encodeURIComponent(searchQuery)}`);
     }
   };
 
@@ -92,9 +96,30 @@ export default function Header() {
             <Link href="/login" className="lc-btn-login">
               👤 Đăng nhập
             </Link>
-            <button className="lc-btn-cart">
+            <Link href="/cart" className="lc-btn-cart" style={{ position: 'relative', textDecoration: 'none' }}>
               🛒 Giỏ hàng
-            </button>
+              {totalItems > 0 && (
+                <span className="lc-cart-badge" style={{
+                  position: 'absolute',
+                  top: '-8px',
+                  right: '-8px',
+                  background: 'var(--lc-orange, #f57c00)',
+                  color: '#fff',
+                  borderRadius: '50%',
+                  minWidth: '18px',
+                  height: '18px',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 4px',
+                  border: '1.5px solid #fff'
+                }}>
+                  {totalItems}
+                </span>
+              )}
+            </Link>
           </div>
         </div>
 
