@@ -320,9 +320,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadAll() {
   if (currentUser) {
-    await Promise.all([loadTemplates(), loadSites(), loadProfiles()]);
+    await Promise.all([loadTemplates(), loadSites(), loadProfiles(), loadStorageServers()]);
   } else {
-    await loadTemplates();
+    await Promise.all([loadTemplates(), loadStorageServers()]);
   }
 }
 
@@ -356,19 +356,25 @@ function switchTab(tab) {
 
   // Update topbar
   const titles = {
-    themes: ['Chọn Theme', 'Chọn giao diện để bắt đầu tạo website của bạn'],
-    sites:  ['Websites', 'Quản lý toàn bộ website đã deploy lên Cloudflare'],
-    config: ['Cấu hình Cloudflare', 'Quản lý nhiều tài khoản Cloudflare API'],
+    themes:  ['Chọn Theme', 'Chọn giao diện để bắt đầu tạo website của bạn'],
+    sites:   ['Websites', 'Quản lý toàn bộ website đã deploy lên Cloudflare'],
+    config:  ['Cấu hình Cloudflare', 'Quản lý nhiều tài khoản Cloudflare API'],
+    storage: ['Server Bucket', 'Quản lý các máy chủ lưu trữ MinIO / S3 riêng biệt cho hệ thống'],
   };
-  document.getElementById('page-title').textContent = titles[tab][0];
-  document.getElementById('page-subtitle').textContent = titles[tab][1];
+  if (titles[tab]) {
+    document.getElementById('page-title').textContent = titles[tab][0];
+    document.getElementById('page-subtitle').textContent = titles[tab][1];
+  }
 
   // Show/hide topbar elements
   const searchWrap = document.getElementById('search-wrap');
   const btnAddProfile = document.getElementById('btn-add-cf-profile');
+  const btnAddStorage = document.getElementById('btn-add-storage-server');
   const btnAddTemplate = document.getElementById('btn-add-template');
-  searchWrap.style.display = tab === 'sites' ? 'block' : 'none';
-  btnAddProfile.style.display = tab === 'config' ? 'inline-flex' : 'none';
+  
+  if (searchWrap) searchWrap.style.display = tab === 'sites' ? 'block' : 'none';
+  if (btnAddProfile) btnAddProfile.style.display = tab === 'config' ? 'inline-flex' : 'none';
+  if (btnAddStorage) btnAddStorage.style.display = (tab === 'storage' && isAdmin()) ? 'inline-flex' : 'none';
   if (btnAddTemplate) {
     btnAddTemplate.style.display = (tab === 'themes' && isAdmin()) ? 'inline-flex' : 'none';
   }
@@ -748,6 +754,182 @@ async function deleteProfile(profileId, name) {
 }
 
 // ============================================================
+// STORAGE SERVERS MANAGEMENT & SELECTION
+// ============================================================
+let allStorageServers = [];
+
+async function loadStorageServers() {
+  try {
+    const res = await authFetch('/api/storage-servers');
+    allStorageServers = await res.json();
+    renderStorageServersList();
+    renderStorageServerOptions();
+    const navCount = document.getElementById('nav-storage-count');
+    if (navCount) navCount.textContent = allStorageServers.length;
+  } catch (e) {
+    console.error('Failed to load storage servers:', e);
+  }
+}
+
+function renderStorageServersList() {
+  const container = document.getElementById('storage-servers-list');
+  const emptyState = document.getElementById('empty-storage-state');
+  const btnAdd = document.getElementById('btn-add-storage-server');
+  if (!container) return;
+
+  if (btnAdd) btnAdd.style.display = isAdmin() ? 'inline-block' : 'none';
+
+  if (!allStorageServers.length) {
+    container.innerHTML = '';
+    if (emptyState) emptyState.style.display = 'block';
+    return;
+  }
+
+  if (emptyState) emptyState.style.display = 'none';
+
+  container.innerHTML = allStorageServers.map(srv => {
+    const typeIcon = srv.type === 'cloudflare_r2' ? '☁️' : (srv.type === 's3' ? '📦' : '🪣');
+    const typeLabel = srv.type === 'cloudflare_r2' ? 'Cloudflare R2' : (srv.type === 's3' ? 'Amazon S3' : 'Server Bucket API');
+    
+    return `
+      <div class="cf-profile-card" id="storage-card-${srv.id}">
+        <div class="cf-profile-header">
+          <div class="cf-profile-name">${typeIcon} ${srv.name}</div>
+          <span class="cf-profile-auth-badge">${typeLabel}</span>
+        </div>
+        <div class="cf-profile-detail"><span>Endpoint:</span> <code>${srv.endpoint || 'Cloudflare Native'}</code></div>
+        ${srv.description ? `<div class="cf-profile-detail"><span>Mô tả:</span> ${srv.description}</div>` : ''}
+        ${isAdmin() ? `
+          <div class="cf-profile-actions" style="margin-top: 12px;">
+            <button class="btn btn-ghost btn-sm" onclick="openEditStorageServerModal('${srv.id}')">✏️ Sửa</button>
+            ${!srv.isDefault ? `<button class="btn btn-danger btn-sm" onclick="deleteStorageServer('${srv.id}', '${srv.name}')">🗑️ Xóa</button>` : '<span style="font-size: 11px; color: var(--text-muted); padding: 4px 8px; font-style: italic;">(Mặc định)</span>'}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderStorageServerOptions() {
+  const select = document.getElementById('site-storage-server-id');
+  if (!select) return;
+
+  if (!allStorageServers.length) {
+    select.innerHTML = '<option value="storage_cf_r2">☁️ Cloudflare R2 (Khuyên dùng)</option><option value="storage_node_1">🪣 Server Bucket Mặc Định (5GB)</option>';
+    return;
+  }
+
+  select.innerHTML = allStorageServers.map(srv => {
+    const icon = srv.type === 'cloudflare_r2' ? '☁️' : (srv.type === 's3' ? '📦' : '🪣');
+    return `<option value="${srv.id}">${icon} ${srv.name} (${srv.endpoint || 'Cloudflare'})</option>`;
+  }).join('');
+
+  onStorageServerChange();
+}
+
+async function onStorageServerChange() {
+  const select = document.getElementById('site-storage-server-id');
+  const helper = document.getElementById('bucket-type-helper');
+  const quotaBox = document.getElementById('server-bucket-quota-info');
+  if (!select) return;
+
+  const selectedId = select.value;
+  const srv = allStorageServers.find(s => s.id === selectedId) || allStorageServers[0];
+
+  if (srv && srv.type === 'server_bucket') {
+    if (helper) helper.textContent = `Lưu trữ trên máy chủ MinIO (${srv.endpoint}). Cấp sẵn 5GB cho tài khoản thường.`;
+    if (quotaBox) {
+      quotaBox.classList.remove('d-none');
+      try {
+        const res = await authFetch('/api/user/storage-quota');
+        if (res.ok) {
+          const data = await res.json();
+          const usedText = document.getElementById('quota-used-text');
+          const totalText = document.getElementById('quota-total-text');
+          if (usedText) usedText.textContent = `${data.usedMB} MB`;
+          if (totalText) totalText.textContent = `${data.quotaGB} GB`;
+        }
+      } catch (err) {}
+    }
+  } else {
+    if (helper) helper.textContent = srv ? srv.description || `Lưu trữ phương tiện trên ${srv.name}` : 'Lưu trữ Cloudflare R2';
+    if (quotaBox) quotaBox.classList.add('d-none');
+  }
+}
+window.onStorageServerChange = onStorageServerChange;
+
+function openAddStorageServerModal() {
+  document.getElementById('storage-server-modal-title').textContent = 'Thêm Máy chủ Storage mới';
+  document.getElementById('btn-submit-storage-server').textContent = 'Lưu Máy chủ';
+  document.getElementById('storage-server-id').value = '';
+  document.getElementById('storage-server-form').reset();
+  openModal('storage-server-modal');
+}
+
+function openEditStorageServerModal(id) {
+  const srv = allStorageServers.find(x => x.id === id);
+  if (!srv) return;
+
+  document.getElementById('storage-server-modal-title').textContent = 'Chỉnh sửa Máy chủ Storage';
+  document.getElementById('btn-submit-storage-server').textContent = 'Cập nhật';
+  document.getElementById('storage-server-id').value = srv.id;
+  document.getElementById('storage-server-name').value = srv.name;
+  document.getElementById('storage-server-type').value = srv.type || 'server_bucket';
+  document.getElementById('storage-server-endpoint').value = srv.endpoint || '';
+  document.getElementById('storage-server-apikey').value = srv.apiKey || '';
+  document.getElementById('storage-server-desc').value = srv.description || '';
+
+  openModal('storage-server-modal');
+}
+
+async function deleteStorageServer(id, name) {
+  if (!confirm(`Xóa máy chủ storage "${name}"?`)) return;
+  try {
+    const res = await authFetch(`/api/storage-servers/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Lỗi không xác định');
+    await loadStorageServers();
+  } catch (err) {
+    alert('Lỗi: ' + err.message);
+  }
+}
+
+document.getElementById('storage-server-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btn-submit-storage-server');
+  btn.disabled = true;
+  btn.textContent = 'Đang lưu…';
+
+  const editId = document.getElementById('storage-server-id').value;
+  const body = {
+    id:          editId,
+    name:        document.getElementById('storage-server-name').value,
+    type:        document.getElementById('storage-server-type').value,
+    endpoint:    document.getElementById('storage-server-endpoint').value,
+    apiKey:      document.getElementById('storage-server-apikey').value,
+    description: document.getElementById('storage-server-desc').value,
+  };
+
+  try {
+    const res = await authFetch('/api/storage-servers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Lỗi không xác định');
+    closeModal('storage-server-modal');
+    await loadStorageServers();
+  } catch (err) {
+    alert('Lỗi: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = editId ? 'Cập nhật' : 'Lưu Máy chủ';
+  }
+});
+
+
+// ============================================================
 // CREATE MODAL — OPEN FROM THEME
 // ============================================================
 function openCreateFromTheme(themeId) {
@@ -778,6 +960,12 @@ function openCreateFromTheme(themeId) {
   }
 
   selectedProfileId = null;
+
+  const bucketTypeSelect = document.getElementById('site-bucket-type');
+  if (bucketTypeSelect) {
+    bucketTypeSelect.value = 'r2';
+    onBucketTypeChange();
+  }
 
   // Render profile selector
   renderProfileSelector();
@@ -832,6 +1020,37 @@ function selectProfile(profileId) {
   });
 }
 
+async function onBucketTypeChange() {
+  const typeSelect = document.getElementById('site-bucket-type');
+  const helper = document.getElementById('bucket-type-helper');
+  const quotaBox = document.getElementById('server-bucket-quota-info');
+  if (!typeSelect) return;
+
+  const val = typeSelect.value;
+  if (val === 'server') {
+    if (helper) helper.textContent = 'Server Bucket: Lưu trữ dữ liệu trên máy chủ MinIO riêng do hệ thống cấp sẵn.';
+    if (quotaBox) {
+      quotaBox.classList.remove('d-none');
+      try {
+        const res = await authFetch('/api/user/storage-quota');
+        if (res.ok) {
+          const data = await res.json();
+          const usedText = document.getElementById('quota-used-text');
+          const totalText = document.getElementById('quota-total-text');
+          if (usedText) usedText.textContent = `${data.usedMB} MB`;
+          if (totalText) totalText.textContent = `${data.quotaGB} GB`;
+        }
+      } catch (err) {
+        // Ignore fetch errors
+      }
+    }
+  } else {
+    if (helper) helper.textContent = 'Cloudflare R2: Lưu trữ trực tiếp trên tài khoản Cloudflare của bạn, không giới hạn bởi dung lượng hệ thống.';
+    if (quotaBox) quotaBox.classList.add('d-none');
+  }
+}
+window.onBucketTypeChange = onBucketTypeChange;
+
 // ============================================================
 // CREATE SITE FORM SUBMIT
 // ============================================================
@@ -852,15 +1071,18 @@ document.getElementById('create-site-form').addEventListener('submit', async (e)
     return;
   }
 
+  const storageServerId = document.getElementById('site-storage-server-id')?.value || 'storage_cf_r2';
+
   btn.disabled = true;
   loader.classList.remove('d-none');
 
   const body = {
-    title:       document.getElementById('site-title').value.trim(),
-    name:        document.getElementById('site-name').value.trim(),
-    adminPassword: adminPassword,
-    template:    currentThemeForCreate || 'ngo-quyen',
-    cfProfileId: selectedProfileId,
+    title:           document.getElementById('site-title').value.trim(),
+    name:            document.getElementById('site-name').value.trim(),
+    adminPassword:   adminPassword,
+    template:        currentThemeForCreate || 'ngo-quyen',
+    cfProfileId:     selectedProfileId,
+    storageServerId: storageServerId,
   };
 
   try {
@@ -1553,6 +1775,8 @@ function bindEvents() {
     'btn-close-auth':     'auth-modal',
     'btn-close-template': 'template-modal',
     'btn-cancel-template':'template-modal',
+    'btn-close-storage-server': 'storage-server-modal',
+    'btn-cancel-storage-server': 'storage-server-modal',
   };
 
   for (const [btnId, modalId] of Object.entries(closes)) {

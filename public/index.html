@@ -39,6 +39,11 @@
           <span class="nav-label">Cấu hình CF</span>
           <span class="nav-badge" id="nav-config-count">0</span>
         </button>
+        <button class="nav-item" id="nav-storage" onclick="switchTab('storage')">
+          <span class="nav-icon">🪣</span>
+          <span class="nav-label">Server Bucket</span>
+          <span class="nav-badge" id="nav-storage-count">0</span>
+        </button>
       </nav>
 
       <div class="sidebar-footer">
@@ -61,9 +66,8 @@
 
     <!-- ===== MAIN CONTENT ===== -->
     <div class="main-wrapper">
-      <!-- Header -->
       <header class="topbar">
-        <div class="topbar-left">
+        <div>
           <h1 class="page-title" id="page-title">Chọn Theme</h1>
           <p class="page-subtitle" id="page-subtitle">Chọn giao diện để bắt đầu tạo website của bạn</p>
         </div>
@@ -73,6 +77,9 @@
           </div>
           <button class="btn btn-primary" id="btn-add-cf-profile" style="display:none" onclick="openAddProfileModal()">
             <span>+</span> Thêm cấu hình
+          </button>
+          <button class="btn btn-primary" id="btn-add-storage-server" style="display:none" onclick="openAddStorageServerModal()">
+            <span>+</span> Thêm Storage Server
           </button>
           <button class="btn btn-primary" id="btn-add-template" style="display:none" onclick="openCreateTemplateModal()">
             <span>+</span> Thêm Theme
@@ -123,10 +130,9 @@
 
         <div class="sites-grid" id="sites-grid">
           <div class="empty-state" id="empty-state">
-            <div class="empty-icon">📁</div>
-            <h3>Chưa có website nào được tạo</h3>
-            <p>Vào tab <strong>Chọn Theme</strong> để bắt đầu tạo website đầu tiên.</p>
-            <button class="btn btn-primary" onclick="switchTab('themes')" style="margin-top:16px">🎨 Chọn Theme</button>
+            <div class="empty-icon">🚀</div>
+            <h3>Chưa có website nào</h3>
+            <p>Chuyển sang tab <strong>"Chọn Theme"</strong> để bắt đầu tạo website đầu tiên của bạn.</p>
           </div>
         </div>
       </section>
@@ -149,6 +155,21 @@
           <div class="empty-icon">🔑</div>
           <h3>Chưa có cấu hình nào</h3>
           <p>Nhấn nút <strong>"+ Thêm cấu hình"</strong> phía trên để thêm tài khoản Cloudflare đầu tiên.</p>
+        </div>
+      </section>
+
+      <!-- ===== TAB: SERVER BUCKETS (STORAGE SERVERS) ===== -->
+      <section class="tab-panel" id="tab-storage">
+        <div class="config-intro">
+          <div class="config-intro-icon">🪣</div>
+          <div>
+            <h3>Quản lý Server Buckets (Storage Servers)</h3>
+            <p>Quản lý các máy chủ lưu trữ MinIO / S3 (ví dụ: storage1.tubecreate.com). Mỗi website được gắn với một cụm máy chủ storage theo ID.</p>
+          </div>
+        </div>
+
+        <div class="cf-profiles-list" id="storage-servers-list">
+          <!-- Injected by JS -->
         </div>
       </section>
     </div>
@@ -188,6 +209,17 @@
             <button type="button" class="btn-eye" onclick="togglePassword('site-admin-password', this)">👁</button>
           </div>
           <small class="helper-text">Mật khẩu phải tối thiểu 8 ký tự, chứa ít nhất 1 chữ hoa (A-Z) và 1 ký tự đặc biệt. Dùng để đăng nhập vào trang quản trị (<code>/admin</code>) của website mới.</small>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px;">
+          <label for="site-storage-server-id">Máy chủ Lưu trữ Phương tiện (Storage Server) <span class="required">*</span></label>
+          <select id="site-storage-server-id" class="form-control" onchange="onStorageServerChange()" style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border, #333); background: var(--bg-card, #1e1e1e); color: var(--text-main, #fff); font-size: 14px;">
+            <!-- Injected by JS -->
+          </select>
+          <small class="helper-text" id="bucket-type-helper" style="display: block; margin-top: 6px; color: var(--text-muted, #aaa); font-size: 12px;">Gắn website với máy chủ lưu trữ phương tiện tương ứng.</small>
+          <div id="server-bucket-quota-info" class="d-none" style="margin-top: 10px; font-size: 12px; padding: 10px 14px; background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.4); border-radius: 6px; color: #e2e8f0;">
+            📊 Dung lượng Server Bucket của bạn: <strong id="quota-used-text" style="color: #60a5fa;">0 MB</strong> / <strong id="quota-total-text" style="color: #a7f3d0;">5 GB</strong>
+          </div>
         </div>
 
         <div class="divider">Cấu hình Cloudflare</div>
@@ -747,6 +779,56 @@ response = requests.post(
       </form>
     </div>
   </div>
+
+  <!-- ===================================================== -->
+  <!-- MODAL: THÊM/SỬA STORAGE SERVER (ADMIN)               -->
+  <!-- ===================================================== -->
+  <div class="modal-backdrop" id="storage-server-modal">
+    <div class="modal-card modal-profile">
+      <div class="modal-header">
+        <h3 id="storage-server-modal-title">Thêm Máy chủ Storage mới</h3>
+        <button class="btn-close" id="btn-close-storage-server">×</button>
+      </div>
+      <form id="storage-server-form" class="modal-body">
+        <input type="hidden" id="storage-server-id">
+        
+        <div class="form-group">
+          <label for="storage-server-name">Tên hiển thị Máy chủ <span class="required">*</span></label>
+          <input type="text" id="storage-server-name" placeholder="ví dụ: Storage Node 1 (storage1.tubecreate.com)" required>
+        </div>
+
+        <div class="form-group">
+          <label for="storage-server-type">Loại Lưu trữ <span class="required">*</span></label>
+          <select id="storage-server-type" class="form-control" style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-main);">
+            <option value="server_bucket" selected>🪣 Server Bucket (MinIO / Bucket API Node)</option>
+            <option value="cloudflare_r2">☁️ Cloudflare R2</option>
+            <option value="s3">📦 Amazon S3 / S3-Compatible</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="storage-server-endpoint">URL Máy chủ (Endpoint) <span class="required">*</span></label>
+          <input type="text" id="storage-server-endpoint" placeholder="ví dụ: https://storage1.tubecreate.com hoặc http://localhost:4000" required>
+        </div>
+
+        <div class="form-group">
+          <label for="storage-server-apikey">API Key / Access Token</label>
+          <input type="password" id="storage-server-apikey" placeholder="Nhập API Key của máy chủ (X-API-Key)">
+        </div>
+
+        <div class="form-group">
+          <label for="storage-server-desc">Ghi chú / Mô tả</label>
+          <input type="text" id="storage-server-desc" placeholder="ví dụ: Máy chủ MinIO tại datacenter Việt Nam, quota 5GB">
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-storage-server">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-storage-server">Lưu Máy chủ</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 
   <script src="app.js"></script>
 </body>

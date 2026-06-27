@@ -80,6 +80,29 @@ const DEFAULT_TEMPLATES = [
   }
 ];
 
+const DEFAULT_STORAGE_SERVERS = [
+  {
+    id: 'storage_cf_r2',
+    name: 'Cloudflare R2 (Tài khoản người dùng)',
+    type: 'cloudflare_r2',
+    endpoint: 'cloudflare',
+    apiKey: '',
+    description: 'Lưu trữ trực tiếp trên tài khoản Cloudflare R2 của bạn',
+    isPublic: true,
+    isDefault: true
+  },
+  {
+    id: 'storage_node_1',
+    name: 'Server Bucket (storage1.tubecreate.com)',
+    type: 'server_bucket',
+    endpoint: 'http://localhost:4000',
+    apiKey: 'bucket-dev-key-2024',
+    description: 'Máy chủ MinIO Cluster 1 (Cấp sẵn 5GB cho tài khoản thường)',
+    isPublic: true,
+    isDefault: true
+  }
+];
+
 function isAdminUser(req) {
   const emailHeader = req.headers['x-user-email'] || '';
   if (emailHeader === 'admin@tubecreate.com' || emailHeader.toLowerCase().startsWith('admin@')) {
@@ -296,13 +319,21 @@ async function readDb() {
     const parsed = JSON.parse(data);
     if (!parsed.sites) parsed.sites = [];
     if (!parsed.cfProfiles) parsed.cfProfiles = [];
+    let modified = false;
     if (!parsed.templates) {
       parsed.templates = DEFAULT_TEMPLATES;
+      modified = true;
+    }
+    if (!parsed.storageServers || !parsed.storageServers.length) {
+      parsed.storageServers = DEFAULT_STORAGE_SERVERS;
+      modified = true;
+    }
+    if (modified) {
       await writeDb(parsed);
     }
     return parsed;
   } catch (err) {
-    const db = { sites: [], cfProfiles: [], templates: DEFAULT_TEMPLATES };
+    const db = { sites: [], cfProfiles: [], templates: DEFAULT_TEMPLATES, storageServers: DEFAULT_STORAGE_SERVERS };
     await writeDb(db);
     return db;
   }
@@ -354,6 +385,130 @@ async function checkProfileOwnership(req, res, db, profileId) {
   }
   return profile;
 }
+
+const NORMAL_USER_QUOTA_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB
+
+async function getUserServerBucketUsage(db, userEmail) {
+  let totalBytes = 0;
+  const storageServers = db.storageServers || DEFAULT_STORAGE_SERVERS;
+  const userSites = (db.sites || []).filter(s => s.userEmail === userEmail && (s.bucketType === 'server' || s.bucketType === 'server_bucket'));
+  
+  for (const site of userSites) {
+    if (!site.bucketName) continue;
+    const serverConf = storageServers.find(srv => srv.id === site.storageServerId) || storageServers.find(srv => srv.type === 'server_bucket') || DEFAULT_STORAGE_SERVERS[1];
+    if (serverConf.type !== 'server_bucket') continue;
+    
+    const endpoint = serverConf.endpoint || 'http://localhost:4000';
+    const apiKey = serverConf.apiKey || 'bucket-dev-key-2024';
+    try {
+      const resp = await fetch(`${endpoint.replace(/\/+$/, '')}/buckets/${site.bucketName}/info`, {
+        headers: { 'X-API-Key': apiKey },
+        signal: AbortSignal.timeout(2500)
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && typeof data.totalSize === 'number') {
+          totalBytes += data.totalSize;
+        }
+      }
+    } catch (e) {
+      // Ignore network timeout or offline service
+    }
+  }
+  return totalBytes;
+}
+
+// Storage Servers Management Endpoints
+app.get('/api/storage-servers', async (req, res) => {
+  const db = await readDb();
+  const servers = db.storageServers || DEFAULT_STORAGE_SERVERS;
+  if (isAdminUser(req)) {
+    return res.json(servers);
+  }
+  // For normal users, filter public ones
+  res.json(servers.filter(s => s.isPublic || s.isDefault));
+});
+
+app.post('/api/storage-servers', async (req, res) => {
+  if (!isAdminUser(req)) {
+    return res.status(403).json({ error: 'Forbidden. Chỉ Admin mới có quyền quản lý Storage Server.' });
+  }
+
+  const { id, name, type, endpoint, apiKey, description, isPublic } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'Tên Server Bucket là bắt buộc.' });
+  }
+
+  const db = await readDb();
+  if (!db.storageServers) db.storageServers = [...DEFAULT_STORAGE_SERVERS];
+
+  const serverId = id || `srv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const existingIndex = db.storageServers.findIndex(s => s.id === serverId);
+
+  const serverData = {
+    id: serverId,
+    name: name.trim(),
+    type: type || 'server_bucket',
+    endpoint: (endpoint || 'http://localhost:4000').trim(),
+    apiKey: (apiKey || '').trim(),
+    description: (description || '').trim(),
+    isPublic: isPublic !== false,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (existingIndex >= 0) {
+    db.storageServers[existingIndex] = { ...db.storageServers[existingIndex], ...serverData };
+  } else {
+    serverData.createdAt = new Date().toISOString();
+    db.storageServers.push(serverData);
+  }
+
+  await writeDb(db);
+  res.json({ success: true, server: serverData });
+});
+
+app.delete('/api/storage-servers/:id', async (req, res) => {
+  if (!isAdminUser(req)) {
+    return res.status(403).json({ error: 'Forbidden. Chỉ Admin mới có quyền xóa Storage Server.' });
+  }
+  const { id } = req.params;
+  const db = await readDb();
+  if (!db.storageServers) db.storageServers = [...DEFAULT_STORAGE_SERVERS];
+
+  const idx = db.storageServers.findIndex(s => s.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'Không tìm thấy Storage Server.' });
+  }
+  if (db.storageServers[idx].isDefault) {
+    return res.status(400).json({ error: 'Không thể xóa Storage Server mặc định của hệ thống.' });
+  }
+
+  db.storageServers.splice(idx, 1);
+  await writeDb(db);
+  res.json({ success: true, message: 'Đã xóa Storage Server thành công.' });
+});
+
+// Storage quota check endpoint
+app.get('/api/user/storage-quota', async (req, res) => {
+  const userEmail = getUserEmail(req);
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized. Vui lòng đăng nhập.' });
+  }
+  const db = await readDb();
+  const isAdmin = isAdminUser(req);
+  const usedBytes = await getUserServerBucketUsage(db, userEmail);
+  const quotaBytes = isAdmin ? 500 * 1024 * 1024 * 1024 : NORMAL_USER_QUOTA_BYTES; // Admin 500GB, Normal 5GB
+  
+  res.json({
+    userEmail,
+    isAdmin,
+    quotaBytes,
+    usedBytes,
+    quotaGB: isAdmin ? 500 : 5,
+    usedMB: parseFloat((usedBytes / (1024 * 1024)).toFixed(2)),
+    usedGB: parseFloat((usedBytes / (1024 * 1024 * 1024)).toFixed(3))
+  });
+});
 
 // 1. Get all sites
 app.get('/api/sites', async (req, res) => {
@@ -423,9 +578,30 @@ app.post('/api/sites', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized. Vui lòng đăng nhập.' });
   }
 
-  let { name, template, apiKey, email, apiToken, accountId, cfProfileId, title, adminPassword } = req.body;
+  let { name, template, apiKey, email, apiToken, accountId, cfProfileId, title, adminPassword, bucketType, storageServerId } = req.body;
 
   const db = await readDb();
+  const storageServers = db.storageServers || DEFAULT_STORAGE_SERVERS;
+  
+  let targetServer = null;
+  if (storageServerId) {
+    targetServer = storageServers.find(s => s.id === storageServerId);
+  }
+  if (!targetServer) {
+    targetServer = (bucketType === 'server') ? storageServers.find(s => s.type === 'server_bucket') : storageServers.find(s => s.type === 'cloudflare_r2');
+  }
+  if (!targetServer) targetServer = DEFAULT_STORAGE_SERVERS[0];
+
+  const chosenBucketType = targetServer.type === 'cloudflare_r2' ? 'r2' : 'server';
+  const chosenStorageServerId = targetServer.id;
+
+  // Validate Server Bucket quota (5GB for normal users)
+  if (chosenBucketType === 'server' && !isAdminUser(req)) {
+    const usedBytes = await getUserServerBucketUsage(db, userEmail);
+    if (usedBytes >= NORMAL_USER_QUOTA_BYTES) {
+      return res.status(400).json({ error: 'Tài khoản của bạn đã dùng hết dung lượng Server Bucket được cấp (Tối đa 5GB). Vui lòng chọn Cloudflare R2 hoặc xóa bớt dữ liệu.' });
+    }
+  }
 
   // Resolve credentials from cfProfileId if provided
   if (cfProfileId) {
@@ -493,13 +669,17 @@ app.post('/api/sites', async (req, res) => {
       apiKey: apiKey || '',
       email: email || '',
       apiToken: apiToken || '',
-      userEmail: userEmail
+      userEmail: userEmail,
+      bucketType: chosenBucketType,
+      storageServerId: chosenStorageServerId
     };
     db.sites.push(site);
   } else {
     site.status = 'deploying';
     site.title = title || site.title || name;
     site.template = chosenTemplate;
+    site.bucketType = chosenBucketType;
+    site.storageServerId = chosenStorageServerId;
     if (adminPassword) site.adminPassword = adminPassword;
     if (cfProfileId) site.cfProfileId = cfProfileId;
     site.accountId = accountId || site.accountId || '';
@@ -518,7 +698,9 @@ app.post('/api/sites', async (req, res) => {
     apiToken: site.apiToken || apiToken || '',
     accountId: site.accountId || accountId || '',
     title: site.title || title || name,
-    adminPassword: site.adminPassword || adminPassword || ''
+    adminPassword: site.adminPassword || adminPassword || '',
+    bucketType: chosenBucketType,
+    storageServerId: chosenStorageServerId
   }).catch(async (err) => {
     await writeLog(name, `\nDEPLOYMENT FAILED: ${err.message}\n`, true);
     const currentDb = await readDb();
@@ -742,8 +924,90 @@ async function deploySite(siteName, creds) {
       await writeLog(siteName, `[LOCAL] Đã copy template local thành công.\n`);
     }
   } else {
-    await writeLog(siteName, `[LOCAL] Không tìm thấy repo cho template "${templateName}", dùng template local...\n`);
+    await writeLog(siteName, `[LOCAL] Không tìm thấy repo GitHub cho template "${templateName}", nạp template cục bộ...\n`);
     await copyDir(localFallback, sitePath);
+  }
+
+  // Kiểm tra tính hợp lệ của Next.js app (nếu repository thiếu next.config.js/mjs/ts thì tự động dùng template local)
+  const hasNextConfig = existsSync(path.join(sitePath, 'next.config.js')) || 
+                        existsSync(path.join(sitePath, 'next.config.mjs')) || 
+                        existsSync(path.join(sitePath, 'next.config.ts'));
+  if (!hasNextConfig && localFallback && existsSync(localFallback)) {
+    await writeLog(siteName, `[LOCAL] Mã nguồn cloned từ Git không chứa next.config (không phải Next.js app). Đang chuyển sang nạp template local chuẩn...\n`);
+    if (existsSync(sitePath)) await fs.rm(sitePath, { recursive: true, force: true });
+    await copyDir(localFallback, sitePath);
+    await writeLog(siteName, `[LOCAL] Nạp template local thành công.\n`);
+  }
+
+  // Ensure essential template configuration files exist
+  const essentialFiles = ['open-next.config.ts', 'open-next.config.js', 'schema.sql'];
+  for (const file of essentialFiles) {
+    const targetFile = path.join(sitePath, file);
+    if (!existsSync(targetFile) && localFallback && existsSync(path.join(localFallback, file))) {
+      await fs.copyFile(path.join(localFallback, file), targetFile);
+      await writeLog(siteName, `[TEMPLATE] Đã bổ sung tập tin "${file}" từ template cục bộ.\n`);
+    }
+  }
+
+  // If open-next.config.ts / js is still missing, generate default configuration
+  const hasOpenNextConfig = existsSync(path.join(sitePath, 'open-next.config.ts')) || existsSync(path.join(sitePath, 'open-next.config.js'));
+  if (!hasOpenNextConfig) {
+    const defaultConfig = `import type { OpenNextConfig } from "@opennextjs/cloudflare";
+
+const config: OpenNextConfig = {
+  default: {
+    override: {
+      wrapper: "cloudflare-node",
+      converter: "edge",
+      proxyExternalRequest: "fetch",
+      incrementalCache: "dummy",
+      tagCache: "dummy",
+      queue: "dummy",
+    },
+  },
+  edgeExternals: ["node:crypto"],
+  middleware: {
+    external: true,
+    override: {
+      wrapper: "cloudflare-edge",
+      converter: "edge",
+      proxyExternalRequest: "fetch",
+      incrementalCache: "dummy",
+      tagCache: "dummy",
+      queue: "dummy",
+    },
+  },
+};
+
+export default config;
+`;
+    await fs.writeFile(path.join(sitePath, 'open-next.config.ts'), defaultConfig, 'utf8');
+    await writeLog(siteName, `[TEMPLATE] Đã tự động tạo tập tin "open-next.config.ts" mặc định cho OpenNext.\n`);
+  }
+
+  // Ensure package.json has required dependencies and build scripts
+  const sitePkgPath = path.join(sitePath, 'package.json');
+  if (existsSync(sitePkgPath)) {
+    try {
+      const pkgContent = await fs.readFile(sitePkgPath, 'utf8');
+      const pkgJson = JSON.parse(pkgContent);
+      if (!pkgJson.dependencies) pkgJson.dependencies = {};
+      if (!pkgJson.scripts) pkgJson.scripts = {};
+      let modified = false;
+      if (!pkgJson.dependencies['@opennextjs/cloudflare'] && !pkgJson.devDependencies?.['@opennextjs/cloudflare']) {
+        pkgJson.dependencies['@opennextjs/cloudflare'] = '^1.19.11';
+        modified = true;
+      }
+      if (!pkgJson.scripts['build:cf']) {
+        pkgJson.scripts['build:cf'] = 'opennextjs-cloudflare build';
+        modified = true;
+      }
+      if (modified) {
+        await fs.writeFile(sitePkgPath, JSON.stringify(pkgJson, null, 2), 'utf8');
+      }
+    } catch (e) {
+      // Ignore pkg parse error
+    }
   }
 
   // ─── STEP 2: Install dependencies ────────────────────────────────────────
@@ -779,34 +1043,71 @@ async function deploySite(siteName, creds) {
 
   // ─── STEP 4: Execute schema.sql ──────────────────────────────────────────
   await writeLog(siteName, `[D1] Chạy schema.sql trên remote D1...\n`);
-  try {
-    await runCommand('npx', ['wrangler', 'd1', 'execute', dbName, '--remote', '--file=schema.sql'], envOptions, siteName);
-    await writeLog(siteName, `[D1] Schema được áp dụng thành công.\n`);
+  const schemaPath = path.join(sitePath, 'schema.sql');
+  if (!existsSync(schemaPath) && localFallback && existsSync(path.join(localFallback, 'schema.sql'))) {
+    await fs.copyFile(path.join(localFallback, 'schema.sql'), schemaPath);
+  }
+  if (existsSync(schemaPath)) {
+    try {
+      await runCommand('npx', ['wrangler', 'd1', 'execute', dbName, '--remote', '--file=schema.sql'], envOptions, siteName);
+      await writeLog(siteName, `[D1] Schema được áp dụng thành công.\n`);
+    } catch (schemaErr) {
+      await writeLog(siteName, `[D1] CẢNH BÁO: Schema thất bại: ${schemaErr.message}. Sẽ tự khởi tạo khi worker chạy lần đầu.\n`);
+    }
+  } else {
+    await writeLog(siteName, `[D1] Bỏ qua schema.sql (không tìm thấy tập tin schema.sql).\n`);
+  }
 
-    if (creds.title) {
+  if (creds.title) {
+    try {
       const settingKey = templateName === 'ngo-quyen' ? 'header_main_title' : 'site_title';
       const escapedTitle = creds.title.replace(/'/g, "''");
       const sqlCommand = `INSERT OR REPLACE INTO settings (key, value) VALUES ('${settingKey}', '${escapedTitle}');`;
       await runCommand('npx', ['wrangler', 'd1', 'execute', dbName, '--remote', `--command=${JSON.stringify(sqlCommand)}`], envOptions, siteName);
       await writeLog(siteName, `[D1] Đã ghi tiêu đề website: "${creds.title}"\n`);
+    } catch (titleErr) {
+      // Ignore setting write error if table doesn't exist yet
     }
-  } catch (schemaErr) {
-    await writeLog(siteName, `[D1] CẢNH BÁO: Schema thất bại: ${schemaErr.message}. Sẽ tự khởi tạo khi worker chạy lần đầu.\n`);
   }
 
-  // ─── STEP 5: Tạo R2 Bucket ───────────────────────────────────────────────
-  await writeLog(siteName, `[R2] Kiểm tra/Tạo R2 bucket "${bucketName}"...\n`);
-  let hasR2 = true;
-  try {
-    await runCommand('npx', ['wrangler', 'r2', 'bucket', 'create', bucketName], envOptions, siteName);
-    await writeLog(siteName, `[R2] Bucket sẵn sàng.\n`);
-  } catch (err) {
-    const currentLogs = await fs.readFile(logFilePath, 'utf8');
-    if (currentLogs.includes('Please enable R2') || currentLogs.includes('10042')) {
-      hasR2 = false;
-      await writeLog(siteName, `[R2] CẢNH BÁO: R2 chưa được bật trên tài khoản này. Bỏ qua R2 binding.\n`);
-    } else {
-      await writeLog(siteName, `[R2] Bucket có thể đã tồn tại: ${err.message}. Tiếp tục...\n`);
+  // ─── STEP 5: Tạo Storage Bucket (Cloudflare R2 hoặc Server Bucket) ─────────
+  let hasR2 = false;
+  const storageServersList = db.storageServers || DEFAULT_STORAGE_SERVERS;
+  const targetServer = storageServersList.find(s => s.id === creds.storageServerId) || storageServersList.find(s => s.type === (creds.bucketType === 'server' ? 'server_bucket' : 'cloudflare_r2')) || DEFAULT_STORAGE_SERVERS[1];
+
+  if (targetServer.type === 'server_bucket') {
+    const srvEndpoint = targetServer.endpoint || 'http://localhost:4000';
+    const srvApiKey = targetServer.apiKey || 'bucket-dev-key-2024';
+    await writeLog(siteName, `[Server Bucket] Khởi tạo bucket "${bucketName}" trên máy chủ ${targetServer.name} (${srvEndpoint})...\n`);
+    try {
+      const resp = await fetch(`${srvEndpoint.replace(/\/+$/, '')}/buckets/${bucketName}`, {
+        method: 'POST',
+        headers: { 'X-API-Key': srvApiKey },
+        signal: AbortSignal.timeout(5000)
+      });
+      if (resp.ok || resp.status === 409) {
+        await writeLog(siteName, `[Server Bucket] Bucket "${bucketName}" sẵn sàng trên máy chủ ${targetServer.name}.\n`);
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        await writeLog(siteName, `[Server Bucket] CẢNH BÁO: ${data.error || resp.statusText}. Tiếp tục...\n`);
+      }
+    } catch (sbErr) {
+      await writeLog(siteName, `[Server Bucket] CẢNH BÁO: Lỗi kết nối Server Bucket API (${srvEndpoint}): ${sbErr.message}. Tiếp tục...\n`);
+    }
+  } else {
+    await writeLog(siteName, `[R2] Kiểm tra/Tạo R2 bucket "${bucketName}"...\n`);
+    hasR2 = true;
+    try {
+      await runCommand('npx', ['wrangler', 'r2', 'bucket', 'create', bucketName], envOptions, siteName);
+      await writeLog(siteName, `[R2] Bucket sẵn sàng.\n`);
+    } catch (err) {
+      const currentLogs = await fs.readFile(logFilePath, 'utf8');
+      if (currentLogs.includes('Please enable R2') || currentLogs.includes('10042')) {
+        hasR2 = false;
+        await writeLog(siteName, `[R2] CẢNH BÁO: R2 chưa được bật trên tài khoản này. Bỏ qua R2 binding.\n`);
+      } else {
+        await writeLog(siteName, `[R2] Bucket có thể đã tồn tại: ${err.message}. Tiếp tục...\n`);
+      }
     }
   }
 
@@ -832,17 +1133,33 @@ database_id = "${dbId}"
 binding = "R2_BUCKET"
 bucket_name = "${bucketName}"
 `;
+  } else if (targetServer.type === 'server_bucket') {
+    wranglerTomlContent += `
+[vars]
+NEXT_PUBLIC_STORAGE_TYPE = "server"
+NEXT_PUBLIC_SERVER_BUCKET_NAME = "${bucketName}"
+NEXT_PUBLIC_SERVER_BUCKET_URL = "${targetServer.endpoint}"
+`;
   }
   await fs.writeFile(path.join(sitePath, 'wrangler.toml'), wranglerTomlContent, 'utf8');
 
   // ─── STEP 7: Build với OpenNext ───────────────────────────────────────────
   await writeLog(siteName, `[BUILD] Build project với OpenNext (opennextjs-cloudflare)...\n`);
   await writeLog(siteName, `[BUILD] Quá trình này có thể mất 3–5 phút, vui lòng chờ...\n`);
+  
   try {
-    await runCommand('npm', ['run', 'build:cf'], envOptions, siteName);
+    await runCommand('npx', ['-y', '@opennextjs/cloudflare', 'build'], envOptions, siteName);
   } catch (err) {
-    const reason = analyzeError(err, 'build:cf');
-    throw new Error(reason || `Build thất bại: ${err.message}`);
+    try {
+      await runCommand('npx', ['opennextjs-cloudflare', 'build'], envOptions, siteName);
+    } catch (err2) {
+      try {
+        await runCommand('npm', ['run', 'build:cf'], envOptions, siteName);
+      } catch (err3) {
+        const reason = analyzeError(err3, 'build:cf') || analyzeError(err2, 'build:cf') || analyzeError(err, 'build:cf');
+        throw new Error(reason || `Build thất bại: ${err3.message || err2.message || err.message}`);
+      }
+    }
   }
   await writeLog(siteName, `[BUILD] Build hoàn tất!\n`);
 
