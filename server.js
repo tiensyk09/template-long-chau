@@ -37,6 +37,58 @@ const TEMPLATE_LOCAL = {
   'long-chau':    path.join(process.cwd(), 'templates', 'long-chau'),
 };
 
+const DEFAULT_TEMPLATES = [
+  {
+    id: 'ngo-quyen',
+    name: 'Cổng thông tin trường học',
+    description: 'Trang tin tức tiếng Việt, phù hợp cho trường học, cơ quan hành chính, tổ chức giáo dục.',
+    thumbnail: '/themes/ngo-quyen.png',
+    tags: ['Tiếng Việt', 'Tin tức', 'Giáo dục'],
+    color: '#1a56a0',
+    demoUrl: '',
+    githubUrl: 'https://github.com/tiensyk09/template-ngo-quyen.git'
+  },
+  {
+    id: 'commandcode',
+    name: 'Tech Landing Page',
+    description: 'Landing page tiếng Anh phong cách hiện đại tối màu, dành cho sản phẩm công nghệ, SaaS.',
+    thumbnail: '/themes/commandcode.png',
+    tags: ['Tiếng Anh', 'Tech', 'SaaS'],
+    color: '#7c3aed',
+    demoUrl: '',
+    githubUrl: 'https://github.com/tiensyk09/template-commandcode.git'
+  },
+  {
+    id: 'korean-news',
+    name: 'Báo điện tử Hàn Quốc',
+    description: 'Portal tin tức tiếng Hàn chuyên nghiệp với đầy đủ chuyên mục và tích hợp nội dung tự động.',
+    thumbnail: '/themes/korean-news.png',
+    tags: ['Tiếng Hàn', 'Tin tức', 'Portal'],
+    color: '#c0392b',
+    demoUrl: '',
+    githubUrl: 'https://github.com/tiensyk09/template-korean-news.git'
+  },
+  {
+    id: 'long-chau',
+    name: 'Nhà thuốc Long Châu',
+    description: 'Giao diện thương mại điện tử nhà thuốc chuyên nghiệp, đầy đủ danh mục nổi bật, sản phẩm Flash Sale, kiểm tra sức khỏe và góc sức khỏe.',
+    thumbnail: '/themes/long-chau.png',
+    tags: ['Tiếng Việt', 'Dược phẩm', 'Bán lẻ'],
+    color: '#005bcd',
+    demoUrl: '',
+    githubUrl: 'https://github.com/tiensyk09/template-long-chau.git'
+  }
+];
+
+function isAdminUser(req) {
+  const emailHeader = req.headers['x-user-email'] || '';
+  if (emailHeader === 'admin@tubecreate.com' || emailHeader.toLowerCase().startsWith('admin@')) {
+    return true;
+  }
+  const rolesHeader = req.headers['x-user-roles'] || '';
+  return rolesHeader.toLowerCase().includes('admin');
+}
+
 // Helper to construct environment variables for Cloudflare commands cleanly, preventing header conflicts
 function getCloudflareEnv(creds) {
   const env = { ...process.env };
@@ -241,9 +293,18 @@ async function copyDir(src, dest) {
 async function readDb() {
   try {
     const data = await fs.readFile(DB_FILE, 'utf8');
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    if (!parsed.sites) parsed.sites = [];
+    if (!parsed.cfProfiles) parsed.cfProfiles = [];
+    if (!parsed.templates) {
+      parsed.templates = DEFAULT_TEMPLATES;
+      await writeDb(parsed);
+    }
+    return parsed;
   } catch (err) {
-    return { sites: [] };
+    const db = { sites: [], cfProfiles: [], templates: DEFAULT_TEMPLATES };
+    await writeDb(db);
+    return db;
   }
 }
 
@@ -253,17 +314,74 @@ async function writeDb(data) {
 
 // API Endpoints
 
+// Helper functions for user access verification
+function getUserEmail(req) {
+  return req.headers['x-user-email'] || '';
+}
 
+async function checkSiteOwnership(req, res, db, siteName) {
+  const userEmail = getUserEmail(req);
+  if (!userEmail) {
+    res.status(401).json({ error: 'Unauthorized. Vui lòng đăng nhập.' });
+    return null;
+  }
+  const site = db.sites.find(s => s.name === siteName);
+  if (!site) {
+    res.status(404).json({ error: 'Không tìm thấy website.' });
+    return null;
+  }
+  if (site.userEmail && site.userEmail !== userEmail) {
+    res.status(403).json({ error: 'Forbidden. Bạn không có quyền quản lý website này.' });
+    return null;
+  }
+  return site;
+}
+
+async function checkProfileOwnership(req, res, db, profileId) {
+  const userEmail = getUserEmail(req);
+  if (!userEmail) {
+    res.status(401).json({ error: 'Unauthorized. Vui lòng đăng nhập.' });
+    return null;
+  }
+  const profile = (db.cfProfiles || []).find(p => p.id === profileId);
+  if (!profile) {
+    res.status(404).json({ error: 'Không tìm thấy cấu hình Cloudflare.' });
+    return null;
+  }
+  if (profile.userEmail && profile.userEmail !== userEmail) {
+    res.status(403).json({ error: 'Forbidden. Bạn không có quyền quản lý cấu hình Cloudflare này.' });
+    return null;
+  }
+  return profile;
+}
 
 // 1. Get all sites
 app.get('/api/sites', async (req, res) => {
+  const userEmail = getUserEmail(req);
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized. Vui lòng đăng nhập.' });
+  }
   const db = await readDb();
-  res.json(db.sites);
+  const filteredSites = (db.sites || []).filter(s => !s.userEmail || s.userEmail === userEmail);
+  res.json(filteredSites);
 });
 
 // 2. Stream logs (SSE)
 app.get('/api/sites/:name/logs', async (req, res) => {
   const { name } = req.params;
+  const userEmail = req.query.userEmail || '';
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized. Vui lòng đăng nhập.' });
+  }
+
+  const db = await readDb();
+  const site = db.sites.find(s => s.name === name);
+  if (!site) {
+    return res.status(404).json({ error: 'Không tìm thấy website.' });
+  }
+  if (site.userEmail && site.userEmail !== userEmail) {
+    return res.status(403).json({ error: 'Forbidden. Bạn không có quyền quản lý website này.' });
+  }
   
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -300,6 +418,11 @@ app.get('/api/sites/:name/logs', async (req, res) => {
 
 // 3. Add & Deploy site
 app.post('/api/sites', async (req, res) => {
+  const userEmail = getUserEmail(req);
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized. Vui lòng đăng nhập.' });
+  }
+
   let { name, template, apiKey, email, apiToken, accountId, cfProfileId, title, adminPassword } = req.body;
 
   const db = await readDb();
@@ -310,6 +433,10 @@ app.post('/api/sites', async (req, res) => {
     const profile = profiles.find(p => p.id === cfProfileId);
     if (!profile) {
       return res.status(400).json({ error: 'Cấu hình Cloudflare không tồn tại.' });
+    }
+    // Verify user owns the profile
+    if (profile.userEmail && profile.userEmail !== userEmail) {
+      return res.status(403).json({ error: 'Bạn không có quyền sử dụng cấu hình Cloudflare này.' });
     }
     accountId = profile.accountId;
     apiKey = profile.apiKey || '';
@@ -345,6 +472,10 @@ app.post('/api/sites', async (req, res) => {
   let site = db.sites.find(s => s.name === name);
   const chosenTemplate = template || (site && site.template) || 'ngo-quyen';
 
+  if (site && site.userEmail && site.userEmail !== userEmail) {
+    return res.status(403).json({ error: 'Bạn không có quyền triển khai hoặc sửa website này.' });
+  }
+
   if (!site) {
     site = {
       name,
@@ -361,7 +492,8 @@ app.post('/api/sites', async (req, res) => {
       accountId: accountId || '',
       apiKey: apiKey || '',
       email: email || '',
-      apiToken: apiToken || ''
+      apiToken: apiToken || '',
+      userEmail: userEmail
     };
     db.sites.push(site);
   } else {
@@ -374,6 +506,7 @@ app.post('/api/sites', async (req, res) => {
     site.apiKey = apiKey || site.apiKey || '';
     site.email = email || site.email || '';
     site.apiToken = apiToken || site.apiToken || '';
+    if (!site.userEmail) site.userEmail = userEmail; // Take ownership if it was legacy
   }
   await writeDb(db);
 
@@ -405,12 +538,10 @@ app.delete('/api/sites/:name', async (req, res) => {
   const { deleteCloudflareResources, apiKey, email, apiToken, accountId } = req.body;
 
   const db = await readDb();
-  const siteIndex = db.sites.findIndex(s => s.name === name);
-  if (siteIndex === -1) {
-    return res.status(404).json({ error: 'Site not found.' });
-  }
+  const site = await checkSiteOwnership(req, res, db, name);
+  if (!site) return;
 
-  const site = db.sites[siteIndex];
+  const siteIndex = db.sites.findIndex(s => s.name === name);
 
   // Perform Cloudflare deletion in background if requested
   if (deleteCloudflareResources) {
@@ -472,10 +603,8 @@ app.post('/api/sites/:name/change-password', async (req, res) => {
   }
 
   const db = await readDb();
-  const site = db.sites.find(s => s.name === name);
-  if (!site) {
-    return res.status(404).json({ error: 'Site not found.' });
-  }
+  const site = await checkSiteOwnership(req, res, db, name);
+  if (!site) return;
 
   // Resolve Cloudflare credentials
   let creds = {
@@ -596,7 +725,9 @@ async function deploySite(siteName, creds) {
   }
   await fs.mkdir(sitePath, { recursive: true });
 
-  const repoUrl = TEMPLATE_REPOS[templateName];
+  const db = await readDb();
+  const dbTemplate = (db.templates || []).find(t => t.id === templateName);
+  const repoUrl = dbTemplate ? dbTemplate.githubUrl : TEMPLATE_REPOS[templateName];
   const localFallback = TEMPLATE_LOCAL[templateName];
 
   if (repoUrl) {
@@ -933,8 +1064,9 @@ async function findExistingD1Database(dbName, envOptions, siteName) {
 app.get('/api/sites/:name/settings', async (req, res) => {
   const { name } = req.params;
   const db = await readDb();
-  const site = db.sites.find(s => s.name === name);
-  if (!site || !site.databaseId) {
+  const site = await checkSiteOwnership(req, res, db, name);
+  if (!site) return;
+  if (!site.databaseId) {
     return res.status(404).json({ error: 'Site or D1 database not configured.' });
   }
 
@@ -1003,8 +1135,9 @@ app.post('/api/sites/:name/settings', async (req, res) => {
   const { name } = req.params;
   const body = req.body;
   const db = await readDb();
-  const site = db.sites.find(s => s.name === name);
-  if (!site || !site.databaseId) {
+  const site = await checkSiteOwnership(req, res, db, name);
+  if (!site) return;
+  if (!site.databaseId) {
     return res.status(404).json({ error: 'Site or D1 database not configured.' });
   }
 
@@ -1075,10 +1208,8 @@ app.post('/api/sites/:name/credentials', async (req, res) => {
   }
 
   const db = await readDb();
-  const site = db.sites.find(s => s.name === name);
-  if (!site) {
-    return res.status(404).json({ error: 'Site not found.' });
-  }
+  const site = await checkSiteOwnership(req, res, db, name);
+  if (!site) return;
 
   site.accountId = accountId || '';
   site.apiKey = apiKey || '';
@@ -1093,8 +1224,9 @@ app.post('/api/sites/:name/credentials', async (req, res) => {
 app.get('/api/sites/:name/api-keys', async (req, res) => {
   const { name } = req.params;
   const db = await readDb();
-  const site = db.sites.find(s => s.name === name);
-  if (!site || !site.databaseId) {
+  const site = await checkSiteOwnership(req, res, db, name);
+  if (!site) return;
+  if (!site.databaseId) {
     return res.status(404).json({ error: 'Site or D1 database not configured.' });
   }
 
@@ -1138,8 +1270,9 @@ app.post('/api/sites/:name/api-keys', async (req, res) => {
   const { name } = req.params;
   const { label, username } = req.body;
   const db = await readDb();
-  const site = db.sites.find(s => s.name === name);
-  if (!site || !site.databaseId) {
+  const site = await checkSiteOwnership(req, res, db, name);
+  if (!site) return;
+  if (!site.databaseId) {
     return res.status(404).json({ error: 'Site or D1 database not configured.' });
   }
 
@@ -1213,8 +1346,9 @@ app.post('/api/sites/:name/api-keys', async (req, res) => {
 app.delete('/api/sites/:name/api-keys/:id', async (req, res) => {
   const { name, id } = req.params;
   const db = await readDb();
-  const site = db.sites.find(s => s.name === name);
-  if (!site || !site.databaseId) {
+  const site = await checkSiteOwnership(req, res, db, name);
+  if (!site) return;
+  if (!site.databaseId) {
     return res.status(404).json({ error: 'Site or D1 database not configured.' });
   }
 
@@ -1253,8 +1387,12 @@ app.delete('/api/sites/:name/api-keys/:id', async (req, res) => {
 
 // GET /api/cf-profiles — Lấy danh sách profiles
 app.get('/api/cf-profiles', async (req, res) => {
+  const userEmail = getUserEmail(req);
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized. Vui lòng đăng nhập.' });
+  }
   const db = await readDb();
-  const profiles = db.cfProfiles || [];
+  const profiles = (db.cfProfiles || []).filter(p => !p.userEmail || p.userEmail === userEmail);
   // Tính websiteCount động từ sites
   const withCount = profiles.map(p => ({
     ...p,
@@ -1265,6 +1403,11 @@ app.get('/api/cf-profiles', async (req, res) => {
 
 // POST /api/cf-profiles — Thêm profile mới
 app.post('/api/cf-profiles', async (req, res) => {
+  const userEmail = getUserEmail(req);
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized. Vui lòng đăng nhập.' });
+  }
+
   let { name, accountId, authType, apiKey, email, apiToken } = req.body;
 
   if (!name || !accountId) {
@@ -1294,7 +1437,8 @@ app.post('/api/cf-profiles', async (req, res) => {
     apiKey: apiKey || '',
     email: email || '',
     apiToken: apiToken || '',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    userEmail: userEmail
   };
 
   db.cfProfiles.push(profile);
@@ -1309,12 +1453,8 @@ app.put('/api/cf-profiles/:id', async (req, res) => {
   let { name, accountId, authType, apiKey, email, apiToken } = req.body;
 
   const db = await readDb();
-  if (!db.cfProfiles) db.cfProfiles = [];
-
-  const profile = db.cfProfiles.find(p => p.id === id);
-  if (!profile) {
-    return res.status(404).json({ error: 'Profile không tồn tại.' });
-  }
+  const profile = await checkProfileOwnership(req, res, db, id);
+  if (!profile) return;
 
   // Auto-detect token
   if (apiKey && apiKey.trim().startsWith('cfut_')) {
@@ -1343,12 +1483,10 @@ app.put('/api/cf-profiles/:id', async (req, res) => {
 app.delete('/api/cf-profiles/:id', async (req, res) => {
   const { id } = req.params;
   const db = await readDb();
-  if (!db.cfProfiles) db.cfProfiles = [];
+  const profile = await checkProfileOwnership(req, res, db, id);
+  if (!profile) return;
 
   const idx = db.cfProfiles.findIndex(p => p.id === id);
-  if (idx === -1) {
-    return res.status(404).json({ error: 'Profile không tồn tại.' });
-  }
 
   // Check if profile is in use
   const inUse = (db.sites || []).filter(s => s.cfProfileId === id).length;
@@ -1365,41 +1503,101 @@ app.delete('/api/cf-profiles/:id', async (req, res) => {
 // TEMPLATES API
 // ============================================================
 app.get('/api/templates', async (req, res) => {
-  const templates = [
-    {
-      id: 'ngo-quyen',
-      name: 'Cổng thông tin trường học',
-      description: 'Trang tin tức tiếng Việt, phù hợp cho trường học, cơ quan hành chính, tổ chức giáo dục.',
-      thumbnail: '/themes/ngo-quyen.png',
-      tags: ['Tiếng Việt', 'Tin tức', 'Giáo dục'],
-      color: '#1a56a0'
-    },
-    {
-      id: 'commandcode',
-      name: 'Tech Landing Page',
-      description: 'Landing page tiếng Anh phong cách hiện đại tối màu, dành cho sản phẩm công nghệ, SaaS.',
-      thumbnail: '/themes/commandcode.png',
-      tags: ['Tiếng Anh', 'Tech', 'SaaS'],
-      color: '#7c3aed'
-    },
-    {
-      id: 'korean-news',
-      name: 'Báo điện tử Hàn Quốc',
-      description: 'Portal tin tức tiếng Hàn chuyên nghiệp với đầy đủ chuyên mục và tích hợp nội dung tự động.',
-      thumbnail: '/themes/korean-news.png',
-      tags: ['Tiếng Hàn', 'Tin tức', 'Portal'],
-      color: '#c0392b'
-    },
-    {
-      id: 'long-chau',
-      name: 'Nhà thuốc Long Châu',
-      description: 'Giao diện thương mại điện tử nhà thuốc chuyên nghiệp, đầy đủ danh mục nổi bật, sản phẩm Flash Sale, kiểm tra sức khỏe và góc sức khỏe.',
-      thumbnail: '/themes/long-chau.png',
-      tags: ['Tiếng Việt', 'Dược phẩm', 'Bán lẻ'],
-      color: '#005bcd'
-    }
-  ];
-  res.json(templates);
+  const db = await readDb();
+  res.json(db.templates || []);
+});
+
+app.put('/api/templates/:id', async (req, res) => {
+  if (!isAdminUser(req)) {
+    return res.status(403).json({ error: 'Forbidden. Bạn không có quyền chỉnh sửa template.' });
+  }
+
+  const { id } = req.params;
+  const { name, description, thumbnail, demoUrl, githubUrl, tags, color } = req.body;
+
+  const db = await readDb();
+  if (!db.templates) db.templates = [];
+  const template = db.templates.find(t => t.id === id);
+
+  if (!template) {
+    return res.status(404).json({ error: 'Không tìm thấy template.' });
+  }
+
+  if (name !== undefined) template.name = name;
+  if (description !== undefined) template.description = description;
+  if (thumbnail !== undefined) template.thumbnail = thumbnail;
+  if (demoUrl !== undefined) template.demoUrl = demoUrl;
+  if (githubUrl !== undefined) template.githubUrl = githubUrl;
+  if (tags !== undefined) template.tags = tags;
+  if (color !== undefined) template.color = color;
+
+  await writeDb(db);
+  res.json({ success: true, template });
+});
+
+app.post('/api/upload-thumbnail', async (req, res) => {
+  if (!isAdminUser(req)) {
+    return res.status(403).json({ error: 'Forbidden. Bạn không có quyền tải ảnh lên.' });
+  }
+
+  const { filename, base64 } = req.body;
+  if (!filename || !base64) {
+    return res.status(400).json({ error: 'Thiếu thông tin file hoặc dữ liệu ảnh.' });
+  }
+
+  try {
+    const base64Data = base64.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    const themesDir = path.join(process.cwd(), 'public', 'themes');
+    await fs.mkdir(themesDir, { recursive: true });
+
+    const ext = path.extname(filename) || '.png';
+    const cleanName = path.basename(filename, ext).replace(/[^a-zA-Z0-9_-]/g, '');
+    const uniqueFilename = `${cleanName}_${Date.now()}${ext}`;
+
+    const filePath = path.join(themesDir, uniqueFilename);
+    await fs.writeFile(filePath, buffer);
+
+    res.json({ success: true, url: `/themes/${uniqueFilename}` });
+  } catch (err) {
+    res.status(500).json({ error: `Lỗi lưu ảnh thumbnail: ${err.message}` });
+  }
+});
+
+app.post('/api/templates', async (req, res) => {
+  if (!isAdminUser(req)) {
+    return res.status(403).json({ error: 'Forbidden. Bạn không có quyền tạo template mới.' });
+  }
+
+  const { id, name, description, thumbnail, demoUrl, githubUrl, tags, color } = req.body;
+
+  if (!id || !/^[a-z0-9\-]+$/.test(id)) {
+    return res.status(400).json({ error: 'Mã định danh Theme (ID) không hợp lệ. Chỉ chấp nhận chữ thường, số và dấu gạch ngang.' });
+  }
+
+  const db = await readDb();
+  if (!db.templates) db.templates = [];
+  
+  if (db.templates.some(t => t.id === id)) {
+    return res.status(400).json({ error: 'Mã định danh Theme (ID) này đã tồn tại.' });
+  }
+
+  const newTemplate = {
+    id,
+    name: name || '',
+    description: description || '',
+    thumbnail: thumbnail || '',
+    demoUrl: demoUrl || '',
+    githubUrl: githubUrl || '',
+    tags: Array.isArray(tags) ? tags : [],
+    color: color || '#1a56a0'
+  };
+
+  db.templates.push(newTemplate);
+  await writeDb(db);
+
+  res.json({ success: true, template: newTemplate });
 });
 
 app.listen(PORT, () => {

@@ -74,6 +74,10 @@
           <button class="btn btn-primary" id="btn-add-cf-profile" style="display:none" onclick="openAddProfileModal()">
             <span>+</span> Thêm cấu hình
           </button>
+          <button class="btn btn-primary" id="btn-add-template" style="display:none" onclick="openCreateTemplateModal()">
+            <span>+</span> Thêm Theme
+          </button>
+          <div class="user-profile-wrap" id="user-profile-wrap"></div>
         </div>
       </header>
 
@@ -611,6 +615,136 @@ response = requests.post(
           </div>
         </form>
       </div>
+    </div>
+  </div>
+
+  <!-- ===================================================== -->
+  <!-- MODAL: ĐĂNG NHẬP / ĐĂNG KÝ                           -->
+  <!-- ===================================================== -->
+  <div class="modal-backdrop" id="auth-modal">
+    <div class="modal-card modal-small">
+      <div class="modal-header">
+        <div>
+          <h3 id="auth-modal-title">🔐 Đăng nhập</h3>
+          <p class="modal-subtitle" id="auth-modal-subtitle">Đăng nhập để quản lý website của bạn</p>
+        </div>
+        <button class="btn-close" id="btn-close-auth">×</button>
+      </div>
+      <form id="auth-form" class="modal-body">
+        <div id="auth-group-name" class="form-group d-none">
+          <label for="auth-name">Họ và Tên <span class="required">*</span></label>
+          <input type="text" id="auth-name" placeholder="Nhập họ và tên..." autocomplete="name">
+        </div>
+
+        <div id="auth-group-username" class="form-group d-none">
+          <label for="auth-username">Tên đăng nhập <span class="required">*</span></label>
+          <input type="text" id="auth-username" placeholder="Nhập tên đăng nhập..." autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="auth-email">Email <span class="required">*</span></label>
+          <input type="email" id="auth-email" placeholder="Nhập địa chỉ email..." required autocomplete="email">
+        </div>
+
+        <div class="form-group">
+          <label for="auth-password">Mật khẩu <span class="required">*</span></label>
+          <div class="password-input-wrap">
+            <input type="password" id="auth-password" placeholder="Nhập mật khẩu..." required autocomplete="current-password">
+            <button type="button" class="btn-eye" onclick="togglePassword('auth-password', this)">👁</button>
+          </div>
+        </div>
+
+        <div id="auth-group-confirm-password" class="form-group d-none">
+          <label for="auth-confirm-password">Xác nhận mật khẩu <span class="required">*</span></label>
+          <div class="password-input-wrap">
+            <input type="password" id="auth-confirm-password" placeholder="Nhập lại mật khẩu..." autocomplete="new-password">
+            <button type="button" class="btn-eye" onclick="togglePassword('auth-confirm-password', this)">👁</button>
+          </div>
+        </div>
+
+        <div class="auth-error-msg" id="auth-error-msg" style="display:none; color:var(--red); font-size:12px; margin-top:8px;"></div>
+
+        <div class="modal-footer" style="padding-bottom:0; margin-top:20px; display:flex; flex-direction:column; gap:12px;">
+          <button type="submit" class="btn btn-primary" id="btn-submit-auth" style="width:100%">
+            <span class="btn-loader d-none"></span> <span id="btn-submit-auth-text">Đăng nhập</span>
+          </button>
+          <div style="text-align:center; font-size:13px; color:var(--text-muted);">
+            <span id="auth-toggle-text">Chưa có tài khoản?</span>
+            <a href="#" id="auth-toggle-link" style="color:var(--purple); text-decoration:none; font-weight:600; margin-left:4px;">Đăng ký</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================== -->
+  <!-- MODAL: SỬA TEMPLATE / THEME (Admin only)             -->
+  <!-- ===================================================== -->
+  <div class="modal-backdrop" id="template-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="template-modal-title">✏️ Chỉnh sửa Theme</h3>
+        <button class="btn-close" id="btn-close-template">×</button>
+      </div>
+      <form id="template-form" class="modal-body">
+        <input type="hidden" id="template-edit-id">
+
+        <div class="form-group" id="template-id-group">
+          <label for="template-id">Mã định danh Theme (ID) <span class="required">*</span></label>
+          <input type="text" id="template-id" placeholder="Ví dụ: my-custom-theme (Chỉ dùng chữ thường, số, gạch ngang)" pattern="^[a-z0-9\-]+$" required>
+        </div>
+
+        <div class="form-group">
+          <label for="template-name">Tên Theme <span class="required">*</span></label>
+          <input type="text" id="template-name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="template-desc">Mô tả Theme <span class="required">*</span></label>
+          <textarea id="template-desc" rows="3" required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="template-thumbnail">Ảnh Thumbnail URL <span class="required">*</span></label>
+          <input type="text" id="template-thumbnail" placeholder="Ví dụ: /themes/long-chau.png" required>
+        </div>
+
+        <div class="form-group">
+          <label for="template-thumbnail-file">Tải lên ảnh từ máy tính (Tự động ghi đè URL phía trên)</label>
+          <input type="file" id="template-thumbnail-file" accept="image/*">
+          <div class="thumbnail-preview-wrap" style="margin-top: 10px; display: none;" id="thumbnail-preview-wrap">
+            <img src="" id="template-thumbnail-preview" style="max-width: 100%; max-height: 150px; border-radius: 8px; border: 1px solid var(--border); object-fit: cover;">
+          </div>
+        </div>
+
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="template-demourl">Đường dẫn Demo URL</label>
+            <input type="url" id="template-demourl" placeholder="Ví dụ: https://nha-thuoc.tiensyk09.workers.dev">
+          </div>
+
+          <div class="form-group">
+            <label for="template-githuburl">Link GitHub Repo URL</label>
+            <input type="url" id="template-githuburl" placeholder="Ví dụ: https://github.com/tiensyk09/template-long-chau.git">
+          </div>
+        </div>
+
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="template-tags">Tags (phân cách bằng dấu phẩy)</label>
+            <input type="text" id="template-tags" placeholder="Ví dụ: Tiếng Việt, Bán lẻ">
+          </div>
+          <div class="form-group">
+            <label for="template-color">Màu chủ đạo (Hex/Color)</label>
+            <input type="text" id="template-color" placeholder="Ví dụ: #005bcd">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-template">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-template">Cập nhật Theme</button>
+        </div>
+      </form>
     </div>
   </div>
 

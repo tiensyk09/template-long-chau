@@ -69,17 +69,261 @@ let currentSiteForCreds = null;
 let currentSiteForAdmin = null;
 let pollingInterval = null;
 
+let currentUser = null;
+let isRegisterMode = false;
+
+// ============================================================
+// AUTHENTICATION CLIENT LOGIC
+// ============================================================
+function isAdmin() {
+  if (!currentUser) return false;
+  // Fallback check based on email (useful if local storage role info is not yet populated or user is admin@tubecreate.com)
+  if (currentUser.email && (currentUser.email === 'admin@tubecreate.com' || currentUser.email.toLowerCase().startsWith('admin@'))) {
+    return true;
+  }
+  const roles = currentUser.roles || currentUser.role;
+  if (!roles) return false;
+  if (Array.isArray(roles)) {
+    return roles.includes('admin');
+  }
+  if (typeof roles === 'string') {
+    return roles.toLowerCase().includes('admin');
+  }
+  return false;
+}
+
+async function authFetch(url, options = {}) {
+  options.headers = options.headers || {};
+  if (currentUser && currentUser.email) {
+    options.headers['X-User-Email'] = currentUser.email;
+  }
+  if (currentUser) {
+    let roles = currentUser.roles || currentUser.role;
+    // Set fallback roles in request header for backward compatibility
+    if (!roles && currentUser.email && (currentUser.email === 'admin@tubecreate.com' || currentUser.email.toLowerCase().startsWith('admin@'))) {
+      roles = 'admin';
+    }
+    if (roles) {
+      options.headers['X-User-Roles'] = Array.isArray(roles) ? roles.join(',') : String(roles);
+    }
+  }
+  return fetch(url, options);
+}
+
+function initAuth() {
+  const user = localStorage.getItem('market_user');
+  if (user) {
+    try {
+      currentUser = JSON.parse(user);
+    } catch (e) {
+      localStorage.removeItem('market_user');
+    }
+  }
+  updateAuthUI();
+  loadAll();
+}
+
+function updateAuthUI() {
+  const profileWrap = document.getElementById('user-profile-wrap');
+  const navSites = document.getElementById('nav-sites');
+  const navConfig = document.getElementById('nav-config');
+  
+  if (!profileWrap) return;
+  
+  if (currentUser) {
+    profileWrap.innerHTML = `
+      <div class="user-info-text">
+        <span class="user-info-name">${currentUser.name || currentUser.username || currentUser.email}</span>
+        <span class="user-info-email">${currentUser.email}</span>
+      </div>
+      <button class="btn-logout" onclick="logoutUser()">Đăng xuất</button>
+    `;
+    if (navSites) navSites.style.display = '';
+    if (navConfig) navConfig.style.display = '';
+  } else {
+    profileWrap.innerHTML = `
+      <button class="user-profile-btn" onclick="openAuthModal()">🔑 Đăng nhập</button>
+    `;
+    if (navSites) navSites.style.display = 'none';
+    if (navConfig) navConfig.style.display = 'none';
+    switchTab('themes');
+  }
+
+  // Update Thêm Theme button visibility
+  const btnAddTemplate = document.getElementById('btn-add-template');
+  if (btnAddTemplate) {
+    const activeTab = document.querySelector('.tab-panel.active')?.id;
+    btnAddTemplate.style.display = (activeTab === 'tab-themes' && isAdmin()) ? 'inline-flex' : 'none';
+  }
+}
+
+function logoutUser() {
+  localStorage.removeItem('user_token');
+  localStorage.removeItem('market_user');
+  currentUser = null;
+  allSites = [];
+  allProfiles = [];
+  updateStats();
+  renderSites();
+  renderProfiles();
+  updateAuthUI();
+  loadAll();
+}
+
+function openAuthModal() {
+  isRegisterMode = false;
+  document.getElementById('auth-form').reset();
+  const errorMsg = document.getElementById('auth-error-msg');
+  if (errorMsg) {
+    errorMsg.style.display = 'none';
+    errorMsg.textContent = '';
+  }
+  updateAuthModalView();
+  openModal('auth-modal');
+}
+
+function updateAuthModalView() {
+  const title = document.getElementById('auth-modal-title');
+  const subtitle = document.getElementById('auth-modal-subtitle');
+  const groupName = document.getElementById('auth-group-name');
+  const groupUsername = document.getElementById('auth-group-username');
+  const groupConfirmPassword = document.getElementById('auth-group-confirm-password');
+  const submitText = document.getElementById('btn-submit-auth-text');
+  const toggleText = document.getElementById('auth-toggle-text');
+  const toggleLink = document.getElementById('auth-toggle-link');
+
+  const nameInput = document.getElementById('auth-name');
+  const usernameInput = document.getElementById('auth-username');
+  const confirmPasswordInput = document.getElementById('auth-confirm-password');
+
+  if (isRegisterMode) {
+    title.textContent = '📝 Tạo tài khoản';
+    subtitle.textContent = 'Đăng ký tài khoản để bắt đầu quản lý website';
+    groupName.classList.remove('d-none');
+    groupUsername.classList.remove('d-none');
+    groupConfirmPassword.classList.remove('d-none');
+    if (nameInput) nameInput.required = true;
+    if (usernameInput) usernameInput.required = true;
+    if (confirmPasswordInput) confirmPasswordInput.required = true;
+    if (submitText) submitText.textContent = 'Đăng ký';
+    if (toggleText) toggleText.textContent = 'Đã có tài khoản?';
+    if (toggleLink) toggleLink.textContent = 'Đăng nhập';
+  } else {
+    title.textContent = '🔐 Đăng nhập';
+    subtitle.textContent = 'Đăng nhập để quản lý website của bạn';
+    groupName.classList.add('d-none');
+    groupUsername.classList.add('d-none');
+    groupConfirmPassword.classList.add('d-none');
+    if (nameInput) nameInput.required = false;
+    if (usernameInput) usernameInput.required = false;
+    if (confirmPasswordInput) confirmPasswordInput.required = false;
+    if (submitText) submitText.textContent = 'Đăng nhập';
+    if (toggleText) toggleText.textContent = 'Chưa có tài khoản?';
+    if (toggleLink) toggleLink.textContent = 'Đăng ký';
+  }
+}
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const errorMsg = document.getElementById('auth-error-msg');
+  errorMsg.style.display = 'none';
+  errorMsg.textContent = '';
+
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const submitBtn = document.getElementById('btn-submit-auth');
+  const loader = submitBtn.querySelector('.btn-loader');
+
+  let name = '', username = '';
+
+  if (isRegisterMode) {
+    name = document.getElementById('auth-name').value.trim();
+    username = document.getElementById('auth-username').value.trim();
+    const confirmPassword = document.getElementById('auth-confirm-password').value;
+
+    if (!name || !username) {
+      errorMsg.textContent = 'Vui lòng điền đầy đủ Họ tên và Tên đăng nhập.';
+      errorMsg.style.display = 'block';
+      return;
+    }
+    if (password !== confirmPassword) {
+      errorMsg.textContent = 'Mật khẩu xác nhận không trùng khớp.';
+      errorMsg.style.display = 'block';
+      return;
+    }
+  }
+
+  submitBtn.disabled = true;
+  if (loader) loader.classList.remove('d-none');
+
+  try {
+    let apiUrl = 'https://api.tubecreate.com/api/user/validate-user.php';
+    let payload = { email, password };
+
+    if (isRegisterMode) {
+      apiUrl = 'https://api.tubecreate.com/api/user/create-user.php';
+      payload = { name, username, email, password, auto_verify: true };
+    }
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (response.ok && (data.token || data.status === 'success' || data.success)) {
+      if (data.token) {
+        localStorage.setItem('user_token', data.token);
+      }
+
+      const userObj = {
+        name: data.name || name || '',
+        username: data.username || username || '',
+        email: email
+      };
+      Object.assign(userObj, data); // Copy root properties (like roles)
+      if (data.user) Object.assign(userObj, data.user); // Copy nested user details if present
+      localStorage.setItem('market_user', JSON.stringify(userObj));
+      currentUser = userObj;
+
+      closeModal('auth-modal');
+      updateAuthUI();
+      await loadAll();
+    } else if (response.ok && (data.success || data.status === 'success') && !data.token) {
+      // Auto login after registration if no token returned
+      isRegisterMode = false;
+      document.getElementById('auth-email').value = email;
+      document.getElementById('auth-password').value = password;
+      await handleAuthSubmit(e);
+    } else {
+      throw new Error(data.message || data.error || (isRegisterMode ? 'Đăng ký thất bại' : 'Email hoặc mật khẩu không chính xác.'));
+    }
+  } catch (err) {
+    errorMsg.textContent = err.message;
+    errorMsg.style.display = 'block';
+  } finally {
+    submitBtn.disabled = false;
+    if (loader) loader.classList.add('d-none');
+  }
+}
+
 // ============================================================
 // INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
-  loadAll();
+  initAuth();
   bindEvents();
   startPolling();
 });
 
 async function loadAll() {
-  await Promise.all([loadTemplates(), loadSites(), loadProfiles()]);
+  if (currentUser) {
+    await Promise.all([loadTemplates(), loadSites(), loadProfiles()]);
+  } else {
+    await loadTemplates();
+  }
 }
 
 function startPolling() {
@@ -96,6 +340,12 @@ function startPolling() {
 // TAB NAVIGATION
 // ============================================================
 function switchTab(tab) {
+  // Check auth
+  if (!currentUser && tab !== 'themes') {
+    openAuthModal();
+    return;
+  }
+
   // Update nav
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.getElementById(`nav-${tab}`)?.classList.add('active');
@@ -116,8 +366,12 @@ function switchTab(tab) {
   // Show/hide topbar elements
   const searchWrap = document.getElementById('search-wrap');
   const btnAddProfile = document.getElementById('btn-add-cf-profile');
+  const btnAddTemplate = document.getElementById('btn-add-template');
   searchWrap.style.display = tab === 'sites' ? 'block' : 'none';
   btnAddProfile.style.display = tab === 'config' ? 'inline-flex' : 'none';
+  if (btnAddTemplate) {
+    btnAddTemplate.style.display = (tab === 'themes' && isAdmin()) ? 'inline-flex' : 'none';
+  }
 }
 
 // ============================================================
@@ -125,7 +379,7 @@ function switchTab(tab) {
 // ============================================================
 async function loadTemplates() {
   try {
-    const res = await fetch('/api/templates');
+    const res = await authFetch('/api/templates');
     allTemplates = await res.json();
     renderThemes();
   } catch (e) {
@@ -162,9 +416,12 @@ function renderThemes() {
           </div>
           <div class="theme-footer">
             <span class="theme-site-count">🌐 ${siteCount} website đã tạo</span>
-            <button class="btn-create-from-theme" onclick="openCreateFromTheme('${t.id}')">
-              + Tạo Website
-            </button>
+            <div style="display:flex; gap:8px;">
+              ${isAdmin() ? `<button class="btn btn-ghost btn-sm" onclick="openEditTemplateModal('${t.id}')" style="padding: 6px 10px;">✏️ Sửa</button>` : ''}
+              <button class="btn-create-from-theme" onclick="openCreateFromTheme('${t.id}')">
+                + Tạo Website
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -173,6 +430,11 @@ function renderThemes() {
 }
 
 function previewTheme(themeId) {
+  const theme = allTemplates.find(t => t.id === themeId);
+  if (theme && theme.demoUrl) {
+    window.open(theme.demoUrl, '_blank');
+    return;
+  }
   // Find a deployed site with this theme
   const site = allSites.find(s => s.template === themeId && s.status === 'active' && s.deployUrl);
   if (site) {
@@ -187,7 +449,7 @@ function previewTheme(themeId) {
 // ============================================================
 async function loadSites(showRender = true) {
   try {
-    const res = await fetch('/api/sites');
+    const res = await authFetch('/api/sites');
     allSites = await res.json();
     if (showRender) {
       renderSites();
@@ -352,7 +614,7 @@ function createSiteCard(site) {
 // ============================================================
 async function loadProfiles() {
   try {
-    const res = await fetch('/api/cf-profiles');
+    const res = await authFetch('/api/cf-profiles');
     allProfiles = await res.json();
     renderProfiles();
     document.getElementById('nav-config-count').textContent = allProfiles.length;
@@ -456,7 +718,7 @@ document.getElementById('profile-form').addEventListener('submit', async (e) => 
   try {
     const url = editId ? `/api/cf-profiles/${editId}` : '/api/cf-profiles';
     const method = editId ? 'PUT' : 'POST';
-    const res = await fetch(url, {
+    const res = await authFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -476,7 +738,7 @@ document.getElementById('profile-form').addEventListener('submit', async (e) => 
 async function deleteProfile(profileId, name) {
   if (!confirm(`Xóa cấu hình "${name}"?`)) return;
   try {
-    const res = await fetch(`/api/cf-profiles/${profileId}`, { method: 'DELETE' });
+    const res = await authFetch(`/api/cf-profiles/${profileId}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Lỗi không xác định');
     await loadProfiles();
@@ -489,6 +751,10 @@ async function deleteProfile(profileId, name) {
 // CREATE MODAL — OPEN FROM THEME
 // ============================================================
 function openCreateFromTheme(themeId) {
+  if (!currentUser) {
+    openAuthModal();
+    return;
+  }
   currentThemeForCreate = themeId;
   const theme = allTemplates.find(t => t.id === themeId);
 
@@ -598,7 +864,7 @@ document.getElementById('create-site-form').addEventListener('submit', async (e)
   };
 
   try {
-    const res = await fetch('/api/sites', {
+    const res = await authFetch('/api/sites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -644,7 +910,7 @@ async function reDeploySite(siteName) {
   }
 
   try {
-    const res = await fetch('/api/sites', {
+    const res = await authFetch('/api/sites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -684,7 +950,8 @@ function openLogModal(siteName) {
   // Close previous SSE
   if (logEventSource) { logEventSource.close(); logEventSource = null; }
 
-  logEventSource = new EventSource(`/api/sites/${siteName}/logs`);
+  const emailParam = currentUser && currentUser.email ? `?userEmail=${encodeURIComponent(currentUser.email)}` : '';
+  logEventSource = new EventSource(`/api/sites/${siteName}/logs${emailParam}`);
 
   logEventSource.onmessage = async (event) => {
     const data = JSON.parse(event.data);
@@ -811,7 +1078,7 @@ document.getElementById('btn-confirm-delete').addEventListener('click', async ()
     deleteCfCheckbox.disabled = true;
     if (confirmInput) confirmInput.disabled = true;
 
-    const res = await fetch(`/api/sites/${currentSiteForDelete}`, {
+    const res = await authFetch(`/api/sites/${currentSiteForDelete}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -855,7 +1122,7 @@ function openSettingsModal(siteName) {
   openModal('settings-modal');
 
   // Load current settings from D1
-  fetch(`/api/sites/${siteName}/settings`)
+  authFetch(`/api/sites/${siteName}/settings`)
     .then(r => r.json())
     .then(data => {
       document.getElementById('settings-main-title').value     = data.header_main_title || '';
@@ -889,7 +1156,7 @@ document.getElementById('settings-form').addEventListener('submit', async (e) =>
   };
 
   try {
-    const res = await fetch(`/api/sites/${currentSiteForSettings}/settings`, {
+    const res = await authFetch(`/api/sites/${currentSiteForSettings}/settings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -920,7 +1187,7 @@ function openApiModal(siteName) {
 
 async function loadApiKeys(siteName) {
   try {
-    const res = await fetch(`/api/sites/${siteName}/api-keys`);
+    const res = await authFetch(`/api/sites/${siteName}/api-keys`);
     const keys = await res.json();
     const tbody = document.getElementById('api-keys-table-body');
     if (!keys.length) {
@@ -952,7 +1219,7 @@ document.getElementById('create-api-key-form').addEventListener('submit', async 
   btn.textContent = 'Đang tạo…';
 
   try {
-    const res = await fetch(`/api/sites/${currentSiteForApi}/api-keys`, {
+    const res = await authFetch(`/api/sites/${currentSiteForApi}/api-keys`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -979,7 +1246,7 @@ document.getElementById('create-api-key-form').addEventListener('submit', async 
 async function deleteApiKey(siteName, keyId) {
   if (!confirm('Xóa API Key này?')) return;
   try {
-    const res = await fetch(`/api/sites/${siteName}/api-keys/${keyId}`, { method: 'DELETE' });
+    const res = await authFetch(`/api/sites/${siteName}/api-keys/${keyId}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Lỗi không xác định');
     loadApiKeys(siteName);
@@ -1058,7 +1325,7 @@ document.getElementById('creds-form').addEventListener('submit', async (e) => {
   };
 
   try {
-    const res = await fetch(`/api/sites/${currentSiteForCreds}/credentials`, {
+    const res = await authFetch(`/api/sites/${currentSiteForCreds}/credentials`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -1151,7 +1418,7 @@ document.getElementById('change-password-form').addEventListener('submit', async
   btn.textContent = 'Đang đổi mật khẩu…';
 
   try {
-    const res = await fetch(`/api/sites/${currentSiteForAdmin}/change-password`, {
+    const res = await authFetch(`/api/sites/${currentSiteForAdmin}/change-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newPassword })
@@ -1175,6 +1442,74 @@ document.getElementById('change-password-form').addEventListener('submit', async
     btn.textContent = 'Lưu mật khẩu mới';
   }
 });
+
+// ============================================================
+// TEMPLATE EDIT MODAL (Admin only)
+// ============================================================
+function openEditTemplateModal(templateId) {
+  const t = allTemplates.find(x => x.id === templateId);
+  if (!t) return;
+
+  document.getElementById('template-modal-title').textContent = '✏️ Chỉnh sửa Theme';
+  document.getElementById('btn-submit-template').textContent = 'Cập nhật Theme';
+
+  const idGroup = document.getElementById('template-id-group');
+  if (idGroup) idGroup.style.display = 'none';
+  const idInput = document.getElementById('template-id');
+  if (idInput) {
+    idInput.required = false;
+    idInput.value = t.id;
+  }
+
+  document.getElementById('template-edit-id').value = t.id;
+  document.getElementById('template-name').value = t.name || '';
+  document.getElementById('template-desc').value = t.description || '';
+  document.getElementById('template-thumbnail').value = t.thumbnail || '';
+  document.getElementById('template-demourl').value = t.demoUrl || '';
+  document.getElementById('template-githuburl').value = t.githubUrl || '';
+  document.getElementById('template-tags').value = Array.isArray(t.tags) ? t.tags.join(', ') : (t.tags || '');
+  document.getElementById('template-color').value = t.color || '';
+
+  const fileInput = document.getElementById('template-thumbnail-file');
+  if (fileInput) fileInput.value = '';
+  const previewWrap = document.getElementById('thumbnail-preview-wrap');
+  if (previewWrap) previewWrap.style.display = 'none';
+  const previewImg = document.getElementById('template-thumbnail-preview');
+  if (previewImg) previewImg.src = '';
+
+  openModal('template-modal');
+}
+
+function openCreateTemplateModal() {
+  document.getElementById('template-modal-title').textContent = '➕ Thêm Theme mới';
+  document.getElementById('btn-submit-template').textContent = 'Thêm Theme';
+
+  const idGroup = document.getElementById('template-id-group');
+  if (idGroup) idGroup.style.display = '';
+  const idInput = document.getElementById('template-id');
+  if (idInput) {
+    idInput.required = true;
+    idInput.value = '';
+  }
+
+  document.getElementById('template-edit-id').value = '';
+  document.getElementById('template-name').value = '';
+  document.getElementById('template-desc').value = '';
+  document.getElementById('template-thumbnail').value = '';
+  document.getElementById('template-demourl').value = '';
+  document.getElementById('template-githuburl').value = '';
+  document.getElementById('template-tags').value = '';
+  document.getElementById('template-color').value = '';
+
+  const fileInput = document.getElementById('template-thumbnail-file');
+  if (fileInput) fileInput.value = '';
+  const previewWrap = document.getElementById('thumbnail-preview-wrap');
+  if (previewWrap) previewWrap.style.display = 'none';
+  const previewImg = document.getElementById('template-thumbnail-preview');
+  if (previewImg) previewImg.src = '';
+
+  openModal('template-modal');
+}
 
 // ============================================================
 // MODAL HELPERS
@@ -1215,6 +1550,9 @@ function bindEvents() {
     'btn-close-profile':  'profile-modal',
     'btn-close-admin-modal': 'admin-modal',
     'btn-cancel-change-pw': 'admin-modal',
+    'btn-close-auth':     'auth-modal',
+    'btn-close-template': 'template-modal',
+    'btn-cancel-template':'template-modal',
   };
 
   for (const [btnId, modalId] of Object.entries(closes)) {
@@ -1248,6 +1586,101 @@ function bindEvents() {
     const btn = document.getElementById('btn-confirm-delete');
     if (btn && currentSiteForDelete) {
       btn.disabled = (e.target.value.trim() !== currentSiteForDelete);
+    }
+  });
+
+  // Auth form submit
+  document.getElementById('auth-form')?.addEventListener('submit', handleAuthSubmit);
+
+  // Auth form register toggle
+  document.getElementById('auth-toggle-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    isRegisterMode = !isRegisterMode;
+    updateAuthModalView();
+  });
+
+  // Handle thumbnail preview
+  document.getElementById('template-thumbnail-file')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const previewWrap = document.getElementById('thumbnail-preview-wrap');
+        const img = document.getElementById('template-thumbnail-preview');
+        if (img) img.src = evt.target.result;
+        if (previewWrap) previewWrap.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // Template form submit
+  document.getElementById('template-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btn-submit-template');
+    const isEdit = !!document.getElementById('template-edit-id').value;
+    btn.disabled = true;
+    btn.textContent = isEdit ? 'Đang cập nhật…' : 'Đang thêm mới…';
+
+    const editId = document.getElementById('template-edit-id').value;
+    const body = {
+      name:        document.getElementById('template-name').value.trim(),
+      description: document.getElementById('template-desc').value.trim(),
+      thumbnail:   document.getElementById('template-thumbnail').value.trim(),
+      demoUrl:     document.getElementById('template-demourl').value.trim(),
+      githubUrl:   document.getElementById('template-githuburl').value.trim(),
+      tags:        document.getElementById('template-tags').value.split(',').map(s => s.trim()).filter(Boolean),
+      color:       document.getElementById('template-color').value.trim(),
+    };
+
+    try {
+      // 1. Upload thumbnail file if selected
+      const fileInput = document.getElementById('template-thumbnail-file');
+      if (fileInput && fileInput.files && fileInput.files[0]) {
+        const file = fileInput.files[0];
+        const base64Data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        const uploadRes = await authFetch('/api/upload-thumbnail', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, base64: base64Data })
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error || 'Lỗi tải ảnh lên');
+        body.thumbnail = uploadData.url;
+      }
+
+      // 2. Perform template create or update
+      let url = '/api/templates';
+      let method = 'POST';
+
+      if (isEdit) {
+        url = `/api/templates/${editId}`;
+        method = 'PUT';
+      } else {
+        body.id = document.getElementById('template-id').value.trim();
+      }
+
+      const res = await authFetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Lỗi lưu thông tin');
+      
+      closeModal('template-modal');
+      await loadTemplates();
+    } catch (err) {
+      alert('Lỗi: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = isEdit ? 'Cập nhật Theme' : 'Thêm Theme';
     }
   });
 }

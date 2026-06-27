@@ -809,6 +809,7 @@ label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
 input[type="text"],
 input[type="email"],
 input[type="password"],
+input[type="url"],
 select,
 textarea {
   background: var(--bg-surface);
@@ -820,6 +821,38 @@ textarea {
   border-radius: var(--radius);
   width: 100%;
   transition: all var(--transition);
+}
+
+input[type="file"] {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  width: 100%;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+input[type="file"]::file-selector-button {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 12px;
+  transition: all var(--transition);
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: var(--bg-card);
+  border-color: var(--border-light);
 }
 
 input:focus, select:focus, textarea:focus {
@@ -1164,3 +1197,74 @@ select option { background: var(--bg-card); }
   color: #fbbf24;
   border: 1px solid rgba(245, 158, 11, 0.25);
 }
+
+/* ============================================================ USER PROFILE & AUTH MODAL */
+.user-profile-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-profile-btn {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--transition);
+}
+
+.user-profile-btn:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-light);
+}
+
+.user-info-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.user-info-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.user-info-email {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.btn-logout {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.25);
+  color: var(--red);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-logout:hover {
+  background: rgba(239,68,68,0.2);
+  border-color: rgba(239,68,68,0.4);
+}
+
+.auth-error-msg {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.25);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-top: 8px;
+}
+
