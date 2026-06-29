@@ -361,7 +361,7 @@ async function checkSiteOwnership(req, res, db, siteName) {
     res.status(404).json({ error: 'Không tìm thấy website.' });
     return null;
   }
-  if (site.userEmail && site.userEmail !== userEmail) {
+  if (site.userEmail !== userEmail && !isAdminUser(req)) {
     res.status(403).json({ error: 'Forbidden. Bạn không có quyền quản lý website này.' });
     return null;
   }
@@ -510,14 +510,14 @@ app.get('/api/user/storage-quota', async (req, res) => {
   });
 });
 
-// 1. Get all sites
 app.get('/api/sites', async (req, res) => {
   const userEmail = getUserEmail(req);
   if (!userEmail) {
     return res.status(401).json({ error: 'Unauthorized. Vui lòng đăng nhập.' });
   }
   const db = await readDb();
-  const filteredSites = (db.sites || []).filter(s => !s.userEmail || s.userEmail === userEmail);
+  const allSites = db.sites || [];
+  const filteredSites = isAdminUser(req) ? allSites : allSites.filter(s => s.userEmail === userEmail);
   res.json(filteredSites);
 });
 
@@ -534,7 +534,7 @@ app.get('/api/sites/:name/logs', async (req, res) => {
   if (!site) {
     return res.status(404).json({ error: 'Không tìm thấy website.' });
   }
-  if (site.userEmail && site.userEmail !== userEmail) {
+  if (site.userEmail !== userEmail && !isAdminUser(req)) {
     return res.status(403).json({ error: 'Forbidden. Bạn không có quyền quản lý website này.' });
   }
   
