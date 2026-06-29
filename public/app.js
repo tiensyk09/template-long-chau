@@ -127,6 +127,7 @@ function updateAuthUI() {
   const profileWrap = document.getElementById('user-profile-wrap');
   const navSites = document.getElementById('nav-sites');
   const navConfig = document.getElementById('nav-config');
+  const navStorage = document.getElementById('nav-storage');
   
   if (!profileWrap) return;
   
@@ -140,12 +141,14 @@ function updateAuthUI() {
     `;
     if (navSites) navSites.style.display = '';
     if (navConfig) navConfig.style.display = '';
+    if (navStorage) navStorage.style.display = isAdmin() ? '' : 'none';
   } else {
     profileWrap.innerHTML = `
       <button class="user-profile-btn" onclick="openAuthModal()">🔑 Đăng nhập</button>
     `;
     if (navSites) navSites.style.display = 'none';
     if (navConfig) navConfig.style.display = 'none';
+    if (navStorage) navStorage.style.display = 'none';
     switchTab('themes');
   }
 
@@ -343,6 +346,13 @@ function switchTab(tab) {
   // Check auth
   if (!currentUser && tab !== 'themes') {
     openAuthModal();
+    return;
+  }
+
+  // Check admin rights for storage tab
+  if (tab === 'storage' && !isAdmin()) {
+    alert('Chỉ tài khoản Admin mới có quyền truy cập trang Quản lý Server Bucket.');
+    switchTab('sites');
     return;
   }
 

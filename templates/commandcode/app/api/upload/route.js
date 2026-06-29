@@ -39,12 +39,46 @@ export async function POST(request) {
     const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
     const uniqueName = `${Date.now()}_${safeName}`;
 
-    // 1. Thử tải lên Cloudflare R2
+    let ctxEnv = {};
     try {
       const { getCloudflareContext } = await import('@opennextjs/cloudflare');
-      const ctx = getCloudflareContext();
-      if (ctx?.env?.R2_BUCKET) {
-        await ctx.env.R2_BUCKET.put(uniqueName, buffer, {
+      ctxEnv = getCloudflareContext()?.env || {};
+    } catch (e) {}
+
+    // 0. Thử tải lên Server Bucket (MinIO Node API)
+    const storageType = ctxEnv.NEXT_PUBLIC_STORAGE_TYPE || process.env.NEXT_PUBLIC_STORAGE_TYPE;
+    const srvBucketName = ctxEnv.NEXT_PUBLIC_SERVER_BUCKET_NAME || process.env.NEXT_PUBLIC_SERVER_BUCKET_NAME;
+    const srvBucketUrl = ctxEnv.NEXT_PUBLIC_SERVER_BUCKET_URL || process.env.NEXT_PUBLIC_SERVER_BUCKET_URL;
+    const srvBucketKey = ctxEnv.NEXT_PUBLIC_SERVER_BUCKET_KEY || process.env.NEXT_PUBLIC_SERVER_BUCKET_KEY || 'bucket-dev-key-2024';
+
+    if (storageType === 'server' && srvBucketName && srvBucketUrl) {
+      try {
+        const formData = new FormData();
+        const fileBlob = new Blob([buffer], { type: mimeType });
+        formData.append('file', fileBlob, uniqueName);
+
+        const uploadEndpoint = `${srvBucketUrl.replace(/\/+$/, '')}/buckets/${srvBucketName}/objects/${uniqueName}`;
+        const srvRes = await fetch(uploadEndpoint, {
+          method: 'PUT',
+          headers: {
+            'X-API-Key': srvBucketKey,
+          },
+          body: formData,
+        });
+
+        if (srvRes.ok) {
+          const publicUrl = `${srvBucketUrl.replace(/\/+$/, '')}/buckets/${srvBucketName}/objects/${uniqueName}`;
+          return NextResponse.json({ url: publicUrl, size: buffer.length });
+        }
+      } catch (sbErr) {
+        console.warn('Server Bucket upload failed:', sbErr.message);
+      }
+    }
+
+    // 1. Thử tải lên Cloudflare R2
+    try {
+      if (ctxEnv?.R2_BUCKET) {
+        await ctxEnv.R2_BUCKET.put(uniqueName, buffer, {
           httpMetadata: { contentType: mimeType }
         });
 
@@ -53,13 +87,13 @@ export async function POST(request) {
           if (thumbMatches) {
             const thumbBuffer = Buffer.from(thumbMatches[2], 'base64');
             const thumbName = uniqueName.replace(/\.[^.]+$/, '') + '_thumb.webp';
-            await ctx.env.R2_BUCKET.put(thumbName, thumbBuffer, {
+            await ctxEnv.R2_BUCKET.put(thumbName, thumbBuffer, {
               httpMetadata: { contentType: 'image/webp' }
             });
           }
         }
 
-        const r2PublicUrl = process.env.NEXT_PUBLIC_R2_URL || '';
+        const r2PublicUrl = ctxEnv.NEXT_PUBLIC_R2_URL || process.env.NEXT_PUBLIC_R2_URL || '';
         const url = r2PublicUrl ? `${r2PublicUrl}/${uniqueName}` : `/api/uploads/${uniqueName}`;
         return NextResponse.json({ url, size: buffer.length });
       }

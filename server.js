@@ -379,7 +379,7 @@ async function checkProfileOwnership(req, res, db, profileId) {
     res.status(404).json({ error: 'Không tìm thấy cấu hình Cloudflare.' });
     return null;
   }
-  if (profile.userEmail && profile.userEmail !== userEmail) {
+  if (profile.userEmail !== userEmail && !isAdminUser(req)) {
     res.status(403).json({ error: 'Forbidden. Bạn không có quyền quản lý cấu hình Cloudflare này.' });
     return null;
   }
@@ -611,7 +611,7 @@ app.post('/api/sites', async (req, res) => {
       return res.status(400).json({ error: 'Cấu hình Cloudflare không tồn tại.' });
     }
     // Verify user owns the profile
-    if (profile.userEmail && profile.userEmail !== userEmail) {
+    if (profile.userEmail !== userEmail && !isAdminUser(req)) {
       return res.status(403).json({ error: 'Bạn không có quyền sử dụng cấu hình Cloudflare này.' });
     }
     accountId = profile.accountId;
@@ -1139,6 +1139,7 @@ bucket_name = "${bucketName}"
 NEXT_PUBLIC_STORAGE_TYPE = "server"
 NEXT_PUBLIC_SERVER_BUCKET_NAME = "${bucketName}"
 NEXT_PUBLIC_SERVER_BUCKET_URL = "${targetServer.endpoint}"
+NEXT_PUBLIC_SERVER_BUCKET_KEY = "${targetServer.apiKey || 'bucket-dev-key-2024'}"
 `;
   }
   await fs.writeFile(path.join(sitePath, 'wrangler.toml'), wranglerTomlContent, 'utf8');
@@ -1709,7 +1710,8 @@ app.get('/api/cf-profiles', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized. Vui lòng đăng nhập.' });
   }
   const db = await readDb();
-  const profiles = (db.cfProfiles || []).filter(p => !p.userEmail || p.userEmail === userEmail);
+  const allProfiles = db.cfProfiles || [];
+  const profiles = isAdminUser(req) ? allProfiles : allProfiles.filter(p => p.userEmail === userEmail);
   // Tính websiteCount động từ sites
   const withCount = profiles.map(p => ({
     ...p,
