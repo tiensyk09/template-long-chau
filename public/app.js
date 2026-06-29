@@ -1758,12 +1758,7 @@ function closeModal(id) {
 // EVENTS BINDING
 // ============================================================
 function bindEvents() {
-  // Close modals on backdrop click
-  document.querySelectorAll('.modal-backdrop').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target === el) closeModal(el.id);
-    });
-  });
+  // Disables modal closing on backdrop click to prevent accidental data loss (only close via buttons)
 
   // Button closes
   const closes = {

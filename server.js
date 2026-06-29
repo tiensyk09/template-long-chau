@@ -35,6 +35,7 @@ const TEMPLATE_LOCAL = {
   'korean-news': path.join(process.cwd(), 'templates', 'korean-news'),
   'commandcode': path.join(process.cwd(), 'templates', 'commandcode'),
   'long-chau':    path.join(process.cwd(), 'templates', 'long-chau'),
+  'travel-shop':  path.join(process.cwd(), 'templates', 'travel-shop'),
 };
 
 const DEFAULT_TEMPLATES = [
@@ -77,6 +78,16 @@ const DEFAULT_TEMPLATES = [
     color: '#005bcd',
     demoUrl: '',
     githubUrl: 'https://github.com/tiensyk09/template-long-chau.git'
+  },
+  {
+    id: 'travel-shop',
+    name: 'Travel Shop - Đặc sản & Quà tặng',
+    description: 'Giao diện thương mại điện tử đặc sản vùng miền, quà lưu niệm du lịch & làng nghề truyền thống Việt Nam sang trọng, đẳng cấp.',
+    thumbnail: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
+    tags: ['Tiếng Việt', 'Đặc sản', 'Du lịch'],
+    color: '#0b4d48',
+    demoUrl: '',
+    githubUrl: ''
   }
 ];
 
@@ -880,9 +891,43 @@ async function deleteResourcesFromCloudflare(site, creds) {
 }
 
 // ============================================================
+// BUILD QUEUE SYSTEM — Giới hạn số lượng Build song song để bảo vệ CPU & RAM VPS
+// ============================================================
+const MAX_CONCURRENT_BUILDS = 2; // Tối đa 2 build song song để giữ VPS luôn ổn định
+let activeBuildsCount = 0;
+const buildQueue = [];
+
+async function deploySite(siteName, creds) {
+  return new Promise((resolve, reject) => {
+    buildQueue.push({ siteName, creds, resolve, reject });
+    processBuildQueue();
+  });
+}
+
+async function processBuildQueue() {
+  if (activeBuildsCount >= MAX_CONCURRENT_BUILDS || buildQueue.length === 0) {
+    return;
+  }
+
+  const task = buildQueue.shift();
+  activeBuildsCount++;
+
+  const waitingCount = buildQueue.length;
+  await writeLog(task.siteName, `[QUEUE] Đã cấp slot xử lý. Tiến trình build bắt đầu... (Còn ${waitingCount} website trong hàng đợi)\n`);
+
+  deploySiteInternal(task.siteName, task.creds)
+    .then(task.resolve)
+    .catch(task.reject)
+    .finally(() => {
+      activeBuildsCount--;
+      processBuildQueue();
+    });
+}
+
+// ============================================================
 // Background deployment orchestrator — Phương án B: Git Clone → Build → CF Pages Upload
 // ============================================================
-async function deploySite(siteName, creds) {
+async function deploySiteInternal(siteName, creds) {
   const logFilePath = path.join(LOGS_DIR, `${siteName}.log`);
   // Reset logs
   await fs.writeFile(logFilePath, '', 'utf8');
