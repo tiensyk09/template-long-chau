@@ -1,0 +1,26 @@
+{
+  "id": "live-chat-tawk",
+  "name": "Live Chat (Tawk.to)",
+  "version": "1.0.0",
+  "author": "TubeCreate",
+  "description": "Thêm nút live chat Tawk.to vào góc phải màn hình. Hỗ trợ chat trực tiếp với khách hàng, lịch sử hội thoại và thông báo.",
+  "category": "support",
+  "icon": "💬",
+  "color": "#0f766e",
+  "tags": ["chat", "support", "tawk", "livechat"],
+  "compatibleTemplates": ["travel-shop", "long-chau", "korean-news", "ngo-quyen"],
+  "requiresConfig": [
+    { "key": "TAWK_PROPERTY_ID", "label": "Property ID", "type": "text", "required": true },
+    { "key": "TAWK_WIDGET_ID", "label": "Widget ID", "type": "text", "required": true }
+  ],
+  "free": true,
+  "hooks": {},
+  "blocks": [
+    {
+      "id": "tawk-chat-widget",
+      "label": "Tawk.to Chat Widget",
+      "slot": "page.footer_scripts",
+      "description": "Thêm widget chat nổi ở góc dưới phải của website"
+    }
+  ]
+}

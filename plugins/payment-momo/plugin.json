@@ -1,0 +1,31 @@
+{
+  "id": "payment-momo",
+  "name": "Thanh toán MoMo",
+  "version": "1.0.0",
+  "author": "TubeCreate",
+  "description": "Tích hợp cổng thanh toán ví điện tử MoMo. Hỗ trợ tạo QR code, xác minh thanh toán qua webhook.",
+  "category": "payment",
+  "icon": "💜",
+  "color": "#a21caf",
+  "tags": ["payment", "momo", "qr", "ewallet"],
+  "compatibleTemplates": ["travel-shop", "long-chau"],
+  "requiresConfig": [
+    { "key": "MOMO_PARTNER_CODE", "label": "Partner Code", "type": "text", "required": true },
+    { "key": "MOMO_ACCESS_KEY", "label": "Access Key", "type": "text", "required": true },
+    { "key": "MOMO_SECRET_KEY", "label": "Secret Key", "type": "password", "required": true },
+    { "key": "MOMO_ENDPOINT", "label": "API Endpoint", "type": "text", "required": false, "default": "https://payment.momo.vn" }
+  ],
+  "free": false,
+  "price": "Liên hệ",
+  "hooks": {
+    "server": "server/routes.js"
+  },
+  "blocks": [
+    {
+      "id": "momo-payment-button",
+      "label": "Nút thanh toán MoMo",
+      "slot": "checkout.payment_methods",
+      "description": "Hiển thị tùy chọn thanh toán MoMo với QR code"
+    }
+  ]
+}

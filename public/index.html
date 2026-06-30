@@ -44,6 +44,11 @@
           <span class="nav-label">Server Bucket</span>
           <span class="nav-badge" id="nav-storage-count">0</span>
         </button>
+        <button class="nav-item" id="nav-plugins" onclick="switchTab('plugins')">
+          <span class="nav-icon">🧩</span>
+          <span class="nav-label">Plugins</span>
+          <span class="nav-badge" id="nav-plugins-count">0</span>
+        </button>
       </nav>
 
       <div class="sidebar-footer">
@@ -83,6 +88,9 @@
           </button>
           <button class="btn btn-primary" id="btn-add-template" style="display:none" onclick="openCreateTemplateModal()">
             <span>+</span> Thêm Theme
+          </button>
+          <button class="btn btn-primary" id="btn-add-plugin-store" style="display:none" onclick="openAddPluginStoreModal()">
+            <span>+</span> Thêm Plugin Store
           </button>
           <div class="user-profile-wrap" id="user-profile-wrap"></div>
         </div>
@@ -170,6 +178,49 @@
 
         <div class="cf-profiles-list" id="storage-servers-list">
           <!-- Injected by JS -->
+        </div>
+      </section>
+
+      <!-- ===== TAB: PLUGINS ===== -->
+      <section class="tab-panel" id="tab-plugins">
+        <div class="config-intro">
+          <div class="config-intro-icon">🧩</div>
+          <div>
+            <h3>Plugin Marketplace</h3>
+            <p>Cài thêm tính năng cho website: thanh toán, vận chuyển, analytics, live chat và nhiều hơn nữa.</p>
+          </div>
+        </div>
+
+        <!-- Site selector -->
+        <div class="plugin-site-selector" id="plugin-site-selector">
+          <label for="plugin-site-select">📦 Cài plugin cho website:</label>
+          <select id="plugin-site-select" onchange="onPluginSiteChange(this.value)">
+            <option value="">-- Chọn website --</option>
+          </select>
+        </div>
+
+        <!-- Category filter -->
+        <div class="plugin-category-bar" id="plugin-category-bar">
+          <button class="plugin-cat-btn active" data-cat="all" onclick="filterPlugins('all', this)">🔮 Tất cả</button>
+          <button class="plugin-cat-btn" data-cat="payment" onclick="filterPlugins('payment', this)">💳 Thanh toán</button>
+          <button class="plugin-cat-btn" data-cat="shipping" onclick="filterPlugins('shipping', this)">🚚 Vận chuyển</button>
+          <button class="plugin-cat-btn" data-cat="seo" onclick="filterPlugins('seo', this)">🔍 SEO</button>
+          <button class="plugin-cat-btn" data-cat="analytics" onclick="filterPlugins('analytics', this)">📊 Analytics</button>
+          <button class="plugin-cat-btn" data-cat="support" onclick="filterPlugins('support', this)">💬 Hỗ trợ</button>
+        </div>
+
+        <!-- Plugins grid -->
+        <div class="plugins-grid" id="plugins-grid">
+          <div class="empty-state">
+            <div class="empty-icon">🧩</div>
+            <h3>Đang tải plugins...</h3>
+          </div>
+        </div>
+
+        <!-- Installed plugins for current site -->
+        <div id="installed-plugins-section" style="display:none">
+          <h3 style="margin: 32px 0 16px; font-size: 16px; font-weight: 700; color: var(--text-main);">✅ Đã cài trên website này</h3>
+          <div class="plugins-grid" id="installed-plugins-grid"></div>
         </div>
       </section>
     </div>
@@ -829,6 +880,116 @@ response = requests.post(
     </div>
   </div>
 
+
+  <!-- ===================================================== -->
+  <!-- MODAL: PLUGIN CONFIG                                   -->
+  <!-- ===================================================== -->
+  <div class="modal-backdrop" id="plugin-config-modal" style="display:none">
+    <div class="plugin-config-modal-content">
+      <div class="modal-header" style="padding-bottom: 14px; border-bottom: 1px solid var(--border); margin-bottom: 4px;">
+        <div class="modal-header-info">
+          <div id="plugin-config-icon" style="font-size:28px; margin-right: 4px;"></div>
+          <div>
+            <h3 id="plugin-config-title" style="font-size: 16px;">Cấu hình Plugin</h3>
+            <p id="plugin-config-site-label" style="font-size: 12px; color: var(--text-muted); margin-top: 2px;"></p>
+          </div>
+        </div>
+        <button class="btn-close" onclick="closePluginConfigModal()">×</button>
+      </div>
+
+      <div class="plugin-config-fields" id="plugin-config-fields">
+        <!-- Injected by JS -->
+      </div>
+
+      <div class="modal-footer" style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px;">
+        <button class="btn btn-secondary" onclick="closePluginConfigModal()">Hủy</button>
+        <button class="btn btn-primary" id="btn-save-plugin-config" onclick="savePluginConfig()">Lưu cấu hình</button>
+  <!-- ===================================================== -->
+  <!-- MODAL: ADD PLUGIN TO STORE (Admin only)              -->
+  <!-- ===================================================== -->
+  <div class="modal-backdrop" id="add-plugin-store-modal" style="display:none">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>🧩 Thêm Plugin vào Store</h3>
+        <button class="btn-close" onclick="closeAddPluginStoreModal()">×</button>
+      </div>
+      <form id="add-plugin-store-form" class="modal-body" onsubmit="submitAddPluginStore(event)">
+        <div class="form-group">
+          <label for="pstore-id">Plugin ID (Mã định danh) <span class="required">*</span></label>
+          <input type="text" id="pstore-id" placeholder="Ví dụ: custom-payment (chữ thường, số, gạch ngang)" pattern="^[a-z0-9\-]+$" required>
+        </div>
+
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="pstore-name">Tên Plugin <span class="required">*</span></label>
+            <input type="text" id="pstore-name" placeholder="Ví dụ: Cổng thanh toán XYZ" required>
+          </div>
+          <div class="form-group">
+            <label for="pstore-category">Danh mục <span class="required">*</span></label>
+            <select id="pstore-category" required style="width:100%; background:var(--bg-surface); border:1px solid var(--border-light); color:var(--text-primary); padding:10px; border-radius:var(--radius-sm);">
+              <option value="payment">💳 Thanh toán</option>
+              <option value="shipping">🚚 Vận chuyển</option>
+              <option value="seo">🔍 SEO</option>
+              <option value="analytics">📊 Analytics</option>
+              <option value="support">💬 Hỗ trợ</option>
+              <option value="other">🧩 Khác</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="pstore-githuburl">GitHub Repo URL <span class="required">*</span></label>
+          <input type="url" id="pstore-githuburl" placeholder="https://github.com/username/repo-name.git" required>
+        </div>
+
+        <div class="form-group">
+          <label for="pstore-desc">Mô tả chi tiết</label>
+          <textarea id="pstore-desc" rows="3" placeholder="Mô tả chức năng plugin..."></textarea>
+        </div>
+
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="pstore-icon">Emoji Icon</label>
+            <input type="text" id="pstore-icon" placeholder="Ví dụ: 💳" value="🧩">
+          </div>
+          <div class="form-group">
+            <label for="pstore-color">Màu chủ đạo (Hex/Color)</label>
+            <input type="text" id="pstore-color" placeholder="Ví dụ: #6366f1" value="#6366f1">
+          </div>
+        </div>
+
+        <div class="form-group-row">
+          <div class="form-group">
+            <label for="pstore-tags">Tags (phân cách bằng dấu phẩy)</label>
+            <input type="text" id="pstore-tags" placeholder="Ví dụ: momo, payment, custom">
+          </div>
+          <div class="form-group">
+            <label for="pstore-price-type">Loại giá</label>
+            <select id="pstore-price-type" onchange="togglePStorePriceField(this.value)" style="width:100%; background:var(--bg-surface); border:1px solid var(--border-light); color:var(--text-primary); padding:10px; border-radius:var(--radius-sm);">
+              <option value="free">Miễn phí</option>
+              <option value="paid">Trả phí</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group" id="pstore-price-wrap" style="display:none">
+          <label for="pstore-price">Giá hiển thị</label>
+          <input type="text" id="pstore-price" placeholder="Ví dụ: Liên hệ hoặc 500,000đ">
+        </div>
+
+        <div class="form-group">
+          <label for="pstore-config-json">Yêu cầu cấu hình (JSON Array) — Optional</label>
+          <textarea id="pstore-config-json" rows="3" placeholder='Ví dụ: [{"key":"API_KEY","label":"API Key","type":"text","required":true}]'></textarea>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Nhập mảng JSON cấu hình nếu plugin yêu cầu cài đặt tham số từ user.</div>
+        </div>
+
+        <div class="modal-footer" style="padding-bottom:0; margin-top:16px;">
+          <button type="button" class="btn btn-secondary" onclick="closeAddPluginStoreModal()">Hủy</button>
+          <button type="submit" class="btn btn-primary">Thêm Plugin</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

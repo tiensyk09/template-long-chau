@@ -18,6 +18,7 @@ const DB_FILE = path.join(process.cwd(), 'db.json');
 const LOGS_DIR = path.join(process.cwd(), 'logs');
 const SITES_DIR = path.join(process.cwd(), 'sites');
 const TEMPLATE_DIR = path.join(process.cwd(), 'templates', 'ngo-quyen');
+const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
 
 // ============================================================
 // TEMPLATE → GitHub Repo mapping
@@ -113,6 +114,144 @@ const DEFAULT_STORAGE_SERVERS = [
     isDefault: true
   }
 ];
+
+// ============================================================
+// DEFAULT PLUGIN STORE (seeded on first run)
+// ============================================================
+const DEFAULT_PLUGIN_STORE = [
+  {
+    id: 'payment-cod',
+    name: 'Thanh toán khi nhận hàng (COD)',
+    version: '1.0.0',
+    author: 'TubeCreate',
+    description: 'Phương thức thanh toán tiền mặt khi nhận hàng (Cash on Delivery). Mặc định cho mọi template e-commerce.',
+    category: 'payment',
+    icon: '💵',
+    color: '#16a34a',
+    tags: ['payment', 'cod', 'cash'],
+    free: true,
+    githubUrl: '',
+    requiresConfig: [],
+    compatibleTemplates: ['travel-shop', 'long-chau'],
+    addedAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'payment-momo',
+    name: 'Thanh toán MoMo',
+    version: '1.0.0',
+    author: 'TubeCreate',
+    description: 'Tích hợp cổng thanh toán ví điện tử MoMo. Hỗ trợ tạo QR code và xác minh thanh toán qua webhook.',
+    category: 'payment',
+    icon: '💜',
+    color: '#a21caf',
+    tags: ['payment', 'momo', 'qr', 'ewallet'],
+    free: false,
+    price: 'Liên hệ',
+    githubUrl: '',
+    requiresConfig: [
+      { key: 'MOMO_PARTNER_CODE', label: 'Partner Code', type: 'text', required: true },
+      { key: 'MOMO_ACCESS_KEY', label: 'Access Key', type: 'text', required: true },
+      { key: 'MOMO_SECRET_KEY', label: 'Secret Key', type: 'password', required: true }
+    ],
+    compatibleTemplates: ['travel-shop', 'long-chau'],
+    addedAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'payment-vnpay',
+    name: 'Thanh toán VNPay',
+    version: '1.0.0',
+    author: 'TubeCreate',
+    description: 'Tích hợp cổng thanh toán VNPay - hỗ trợ thẻ ATM nội địa, Visa/Mastercard, QR code ngân hàng.',
+    category: 'payment',
+    icon: '🏦',
+    color: '#1d4ed8',
+    tags: ['payment', 'vnpay', 'atm', 'card'],
+    free: false,
+    price: 'Liên hệ',
+    githubUrl: '',
+    requiresConfig: [
+      { key: 'VNPAY_TMN_CODE', label: 'Terminal Code (TMN Code)', type: 'text', required: true },
+      { key: 'VNPAY_HASH_SECRET', label: 'Hash Secret', type: 'password', required: true }
+    ],
+    compatibleTemplates: ['travel-shop', 'long-chau'],
+    addedAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'seo-toolkit',
+    name: 'SEO Toolkit',
+    version: '1.0.0',
+    author: 'TubeCreate',
+    description: 'Bộ công cụ SEO toàn diện: tự động sinh sitemap.xml, robots.txt, Open Graph tags, structured data (JSON-LD), và phân tích mật độ từ khóa.',
+    category: 'seo',
+    icon: '🔍',
+    color: '#0891b2',
+    tags: ['seo', 'sitemap', 'meta', 'og'],
+    free: true,
+    githubUrl: '',
+    requiresConfig: [],
+    compatibleTemplates: ['travel-shop', 'long-chau', 'korean-news', 'ngo-quyen', 'commandcode'],
+    addedAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'analytics-google',
+    name: 'Google Analytics 4',
+    version: '1.0.0',
+    author: 'TubeCreate',
+    description: 'Tích hợp Google Analytics 4 (GA4) vào mọi trang của website. Theo dõi lượt xem, người dùng, sự kiện và chuyển đổi.',
+    category: 'analytics',
+    icon: '📊',
+    color: '#ea580c',
+    tags: ['analytics', 'google', 'ga4'],
+    free: true,
+    githubUrl: '',
+    requiresConfig: [
+      { key: 'GA4_MEASUREMENT_ID', label: 'Measurement ID (G-XXXXXXXXXX)', type: 'text', required: true }
+    ],
+    compatibleTemplates: ['travel-shop', 'long-chau', 'korean-news', 'ngo-quyen', 'commandcode'],
+    addedAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'live-chat-tawk',
+    name: 'Live Chat (Tawk.to)',
+    version: '1.0.0',
+    author: 'TubeCreate',
+    description: 'Thêm nút live chat Tawk.to vào góc phải màn hình. Hỗ trợ chat trực tiếp với khách hàng, lịch sử hội thoại.',
+    category: 'support',
+    icon: '💬',
+    color: '#0f766e',
+    tags: ['chat', 'support', 'tawk'],
+    free: true,
+    githubUrl: '',
+    requiresConfig: [
+      { key: 'TAWK_PROPERTY_ID', label: 'Property ID', type: 'text', required: true },
+      { key: 'TAWK_WIDGET_ID', label: 'Widget ID', type: 'text', required: true }
+    ],
+    compatibleTemplates: ['travel-shop', 'long-chau', 'korean-news', 'ngo-quyen'],
+    addedAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'shipping-ghn',
+    name: 'Vận chuyển GHN',
+    version: '1.0.0',
+    author: 'TubeCreate',
+    description: 'Tích hợp Giao Hàng Nhanh (GHN) để tự động tính phí vận chuyển theo địa chỉ, tạo đơn giao hàng và theo dõi trạng thái.',
+    category: 'shipping',
+    icon: '🚚',
+    color: '#dc2626',
+    tags: ['shipping', 'ghn', 'delivery'],
+    free: false,
+    price: 'Liên hệ',
+    githubUrl: '',
+    requiresConfig: [
+      { key: 'GHN_TOKEN', label: 'GHN API Token', type: 'password', required: true },
+      { key: 'GHN_SHOP_ID', label: 'Shop ID', type: 'text', required: true },
+      { key: 'GHN_FROM_DISTRICT_ID', label: 'Quận/Huyện gửi hàng (District ID)', type: 'text', required: true }
+    ],
+    compatibleTemplates: ['travel-shop', 'long-chau'],
+    addedAt: '2026-01-01T00:00:00.000Z'
+  }
+];
+
 
 function isAdminUser(req) {
   const emailHeader = req.headers['x-user-email'] || '';
@@ -323,6 +462,44 @@ async function copyDir(src, dest) {
   }
 }
 
+// ============================================================
+// Plugin Registry helpers
+// ============================================================
+async function loadAllPlugins() {
+  const pluginsMap = new Map();
+  const db = await readDb();
+  
+  // 1. Load from DB store
+  const storePlugins = db.pluginStore || [];
+  for (const p of storePlugins) {
+    pluginsMap.set(p.id, { ...p, downloaded: false });
+  }
+
+  // 2. Scan local plugins directory
+  try {
+    await fs.mkdir(PLUGINS_DIR, { recursive: true });
+    const dirs = await fs.readdir(PLUGINS_DIR, { withFileTypes: true });
+    for (const d of dirs) {
+      if (!d.isDirectory()) continue;
+      const manifestPath = path.join(PLUGINS_DIR, d.name, 'plugin.json');
+      if (!existsSync(manifestPath)) continue;
+      try {
+        const raw = await fs.readFile(manifestPath, 'utf8');
+        const manifest = JSON.parse(raw);
+        const existing = pluginsMap.get(manifest.id) || {};
+        pluginsMap.set(manifest.id, {
+          ...existing,
+          ...manifest,
+          downloaded: true,
+          _dir: d.name
+        });
+      } catch (_) { /* skip malformed manifest */ }
+    }
+  } catch (_) { /* plugins dir may not exist yet */ }
+
+  return Array.from(pluginsMap.values());
+}
+
 // Database helper functions
 async function readDb() {
   try {
@@ -330,6 +507,9 @@ async function readDb() {
     const parsed = JSON.parse(data);
     if (!parsed.sites) parsed.sites = [];
     if (!parsed.cfProfiles) parsed.cfProfiles = [];
+    if (!parsed.installedPlugins) parsed.installedPlugins = {};
+    if (!parsed.pluginStore) parsed.pluginStore = DEFAULT_PLUGIN_STORE;
+    
     let modified = false;
     if (!parsed.templates) {
       parsed.templates = DEFAULT_TEMPLATES;
@@ -339,12 +519,27 @@ async function readDb() {
       parsed.storageServers = DEFAULT_STORAGE_SERVERS;
       modified = true;
     }
+    if (!parsed.installedPlugins) {
+      parsed.installedPlugins = {};
+      modified = true;
+    }
+    if (!parsed.pluginStore || !parsed.pluginStore.length) {
+      parsed.pluginStore = DEFAULT_PLUGIN_STORE;
+      modified = true;
+    }
     if (modified) {
       await writeDb(parsed);
     }
     return parsed;
   } catch (err) {
-    const db = { sites: [], cfProfiles: [], templates: DEFAULT_TEMPLATES, storageServers: DEFAULT_STORAGE_SERVERS };
+    const db = { 
+      sites: [], 
+      cfProfiles: [], 
+      templates: DEFAULT_TEMPLATES, 
+      storageServers: DEFAULT_STORAGE_SERVERS, 
+      installedPlugins: {},
+      pluginStore: DEFAULT_PLUGIN_STORE
+    };
     await writeDb(db);
     return db;
   }
@@ -1103,16 +1298,18 @@ export default config;
     await writeLog(siteName, `[D1] Bỏ qua schema.sql (không tìm thấy tập tin schema.sql).\n`);
   }
 
-  if (creds.title) {
-    try {
-      const settingKey = templateName === 'ngo-quyen' ? 'header_main_title' : 'site_title';
-      const escapedTitle = creds.title.replace(/'/g, "''");
-      const sqlCommand = `INSERT OR REPLACE INTO settings (key, value) VALUES ('${settingKey}', '${escapedTitle}');`;
-      await runCommand('npx', ['wrangler', 'd1', 'execute', dbName, '--remote', `--command=${JSON.stringify(sqlCommand)}`], envOptions, siteName);
-      await writeLog(siteName, `[D1] Đã ghi tiêu đề website: "${creds.title}"\n`);
-    } catch (titleErr) {
-      // Ignore setting write error if table doesn't exist yet
-    }
+  try {
+    const settingKey = templateName === 'ngo-quyen' ? 'header_main_title' : 'site_title';
+    const escapedTitle = (creds.title || siteName).replace(/'/g, "''");
+    const sqlCommand = `
+      INSERT OR REPLACE INTO settings (key, value) VALUES ('${settingKey}', '${escapedTitle}');
+      INSERT OR REPLACE INTO settings (key, value) VALUES ('site_name', '${siteName}');
+      INSERT OR REPLACE INTO settings (key, value) VALUES ('manager_url', 'http://localhost:3000');
+    `;
+    await runCommand('npx', ['wrangler', 'd1', 'execute', dbName, '--remote', `--command=${JSON.stringify(sqlCommand)}`], envOptions, siteName);
+    await writeLog(siteName, `[D1] Đã ghi cấu hình site_name, manager_url và tiêu đề website: "${escapedTitle}"\n`);
+  } catch (titleErr) {
+    // Ignore setting write error if table doesn't exist yet
   }
 
   // ─── STEP 5: Tạo Storage Bucket (Cloudflare R2 hoặc Server Bucket) ─────────
@@ -1964,7 +2161,289 @@ app.post('/api/templates', async (req, res) => {
   res.json({ success: true, template: newTemplate });
 });
 
-app.listen(PORT, () => {
+// ============================================================
+// PLUGIN SYSTEM API
+// ============================================================
+
+// GET /api/plugin-store — Danh sách tất cả plugin trong Store (Admin và User)
+app.get('/api/plugin-store', async (req, res) => {
+  try {
+    const db = await readDb();
+    res.json(db.pluginStore || DEFAULT_PLUGIN_STORE);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/plugin-store — Admin thêm plugin mới bằng GitHub URL
+app.post('/api/plugin-store', async (req, res) => {
+  if (!isAdminUser(req)) {
+    return res.status(403).json({ error: 'Forbidden. Chỉ Admin mới có quyền thêm plugin vào Store.' });
+  }
+
+  const { id, name, description, githubUrl, category, icon, color, tags, free, price, requiresConfig, compatibleTemplates } = req.body;
+
+  if (!id || !/^[a-z0-9\-]+$/.test(id)) {
+    return res.status(400).json({ error: 'Mã định danh Plugin (ID) không hợp lệ. Chỉ dùng chữ thường, số, dấu gạch ngang.' });
+  }
+  if (!githubUrl || !githubUrl.startsWith('http')) {
+    return res.status(400).json({ error: 'Link GitHub Repo URL không hợp lệ.' });
+  }
+
+  const db = await readDb();
+  if (!db.pluginStore) db.pluginStore = [];
+
+  if (db.pluginStore.some(p => p.id === id)) {
+    return res.status(400).json({ error: 'Plugin ID này đã tồn tại trong Store.' });
+  }
+
+  const newPlugin = {
+    id,
+    name: name || id,
+    version: '1.0.0',
+    author: 'Admin Added',
+    description: description || '',
+    category: category || 'other',
+    icon: icon || '🧩',
+    color: color || '#6366f1',
+    tags: Array.isArray(tags) ? tags : [],
+    free: free !== false,
+    price: price || '',
+    githubUrl: githubUrl.trim(),
+    requiresConfig: Array.isArray(requiresConfig) ? requiresConfig : [],
+    compatibleTemplates: Array.isArray(compatibleTemplates) ? compatibleTemplates : ['travel-shop', 'long-chau'],
+    addedAt: new Date().toISOString()
+  };
+
+  db.pluginStore.push(newPlugin);
+  await writeDb(db);
+
+  res.json({ success: true, plugin: newPlugin });
+});
+
+// DELETE /api/plugin-store/:id — Admin xóa plugin khỏi Store
+app.delete('/api/plugin-store/:id', async (req, res) => {
+  if (!isAdminUser(req)) {
+    return res.status(403).json({ error: 'Forbidden. Chỉ Admin mới có quyền xóa plugin khỏi Store.' });
+  }
+
+  const { id } = req.params;
+  const db = await readDb();
+  if (!db.pluginStore) db.pluginStore = [];
+
+  const idx = db.pluginStore.findIndex(p => p.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'Không tìm thấy plugin trong Store.' });
+  }
+
+  db.pluginStore.splice(idx, 1);
+  await writeDb(db);
+
+  res.json({ success: true, message: 'Đã xóa plugin khỏi Store.' });
+});
+
+// GET /api/plugins — Danh sách tất cả plugin khả dụng (kết hợp store + local)
+app.get('/api/plugins', async (req, res) => {
+  try {
+    const plugins = await loadAllPlugins();
+    const db = await readDb();
+    const installedPlugins = db.installedPlugins || {};
+    // Annotate with global install count
+    const result = plugins.map(p => ({
+      ...p,
+      _dir: undefined,
+      installedCount: Object.values(installedPlugins).filter(arr => Array.isArray(arr) && arr.some(ip => ip.id === p.id)).length
+    }));
+    res.json({ plugins: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/plugins/installed/:site — Plugin đã cài cho một site
+app.get('/api/plugins/installed/:site', async (req, res) => {
+  const { site } = req.params;
+  const db = await readDb();
+  const site_record = db.sites.find(s => s.name === site);
+  if (!site_record) return res.status(404).json({ error: 'Site không tồn tại.' });
+
+  const userEmail = getUserEmail(req);
+  if (!userEmail) return res.status(401).json({ error: 'Unauthorized.' });
+  if (site_record.userEmail !== userEmail && !isAdminUser(req)) {
+    return res.status(403).json({ error: 'Forbidden.' });
+  }
+
+  const installed = (db.installedPlugins || {})[site] || [];
+  res.json({ installed });
+});
+
+// POST /api/plugins/install — Cài plugin vào một site (Tự động git clone từ GitHub nếu có githubUrl)
+app.post('/api/plugins/install', async (req, res) => {
+  const { site, pluginId, config } = req.body;
+  if (!site || !pluginId) return res.status(400).json({ error: 'Thiếu tham số site hoặc pluginId.' });
+
+  const db = await readDb();
+  const site_record = db.sites.find(s => s.name === site);
+  if (!site_record) return res.status(404).json({ error: 'Site không tồn tại.' });
+
+  const userEmail = getUserEmail(req);
+  if (!userEmail) return res.status(401).json({ error: 'Unauthorized.' });
+  if (site_record.userEmail !== userEmail && !isAdminUser(req)) {
+    return res.status(403).json({ error: 'Forbidden.' });
+  }
+
+  // Load plugin manifest từ store hoặc local
+  const plugins = await loadAllPlugins();
+  const plugin = plugins.find(p => p.id === pluginId);
+  if (!plugin) return res.status(404).json({ error: `Plugin "${pluginId}" không tìm thấy trong store.` });
+
+  // 1. Tự động git clone nếu plugin có githubUrl và chưa tải về máy
+  const pluginDir = path.join(PLUGINS_DIR, pluginId);
+  if (plugin.githubUrl && !existsSync(pluginDir)) {
+    try {
+      await writeLog(site, `[PLUGIN] Đang tải code plugin "${plugin.name}" từ GitHub: ${plugin.githubUrl}...\n`);
+      await runCommand('git', ['clone', plugin.githubUrl, pluginDir], {}, site);
+      
+      const pkgPath = path.join(pluginDir, 'package.json');
+      if (existsSync(pkgPath)) {
+        await writeLog(site, `[PLUGIN] Phát hiện package.json. Đang cài đặt dependencies...\n`);
+        await runCommand('npm', ['install', '--production'], { cwd: pluginDir }, site);
+      }
+      await writeLog(site, `[PLUGIN] Đã tải và cài đặt xong code plugin "${plugin.name}".\n`);
+    } catch (err) {
+      await writeLog(site, `[PLUGIN] Lỗi tải code plugin: ${err.message}\n`, true);
+      return res.status(500).json({ error: `Lỗi tải code plugin từ GitHub: ${err.message}` });
+    }
+  }
+
+  if (!db.installedPlugins) db.installedPlugins = {};
+  if (!db.installedPlugins[site]) db.installedPlugins[site] = [];
+
+  const alreadyInstalled = db.installedPlugins[site].some(p => p.id === pluginId);
+  if (alreadyInstalled) return res.status(409).json({ error: `Plugin "${plugin.name}" đã được cài trên site này.` });
+
+  const entry = {
+    id: pluginId,
+    name: plugin.name,
+    version: plugin.version,
+    installedAt: new Date().toISOString(),
+    config: config || {}
+  };
+  db.installedPlugins[site].push(entry);
+  await writeDb(db);
+
+  // Kích hoạt nóng Express router nếu có
+  await activatePluginRouter(pluginId);
+
+  res.json({ success: true, message: `Đã cài plugin "${plugin.name}" cho site ${site}.`, plugin: entry });
+});
+
+// POST /api/plugins/uninstall — Gỡ plugin khỏi một site
+app.post('/api/plugins/uninstall', async (req, res) => {
+  const { site, pluginId } = req.body;
+  if (!site || !pluginId) return res.status(400).json({ error: 'Thiếu tham số site hoặc pluginId.' });
+
+  const db = await readDb();
+  const site_record = db.sites.find(s => s.name === site);
+  if (!site_record) return res.status(404).json({ error: 'Site không tồn tại.' });
+
+  const userEmail = getUserEmail(req);
+  if (!userEmail) return res.status(401).json({ error: 'Unauthorized.' });
+  if (site_record.userEmail !== userEmail && !isAdminUser(req)) {
+    return res.status(403).json({ error: 'Forbidden.' });
+  }
+
+  if (!db.installedPlugins || !db.installedPlugins[site]) {
+    return res.status(404).json({ error: 'Plugin chưa được cài trên site này.' });
+  }
+
+  const before = db.installedPlugins[site].length;
+  db.installedPlugins[site] = db.installedPlugins[site].filter(p => p.id !== pluginId);
+  if (db.installedPlugins[site].length === before) {
+    return res.status(404).json({ error: `Plugin "${pluginId}" chưa được cài trên site này.` });
+  }
+
+  await writeDb(db);
+  res.json({ success: true, message: `Đã gỡ plugin "${pluginId}" khỏi site ${site}.` });
+});
+
+// PATCH /api/plugins/configure — Cập nhật config của plugin đã cài
+app.patch('/api/plugins/configure', async (req, res) => {
+  const { site, pluginId, config } = req.body;
+  if (!site || !pluginId || !config) return res.status(400).json({ error: 'Thiếu tham số site, pluginId hoặc config.' });
+
+  const db = await readDb();
+  const site_record = db.sites.find(s => s.name === site);
+  if (!site_record) return res.status(404).json({ error: 'Site không tồn tại.' });
+
+  const userEmail = getUserEmail(req);
+  if (!userEmail) return res.status(401).json({ error: 'Unauthorized.' });
+  if (site_record.userEmail !== userEmail && !isAdminUser(req)) {
+    return res.status(403).json({ error: 'Forbidden.' });
+  }
+
+  if (!db.installedPlugins || !db.installedPlugins[site]) {
+    return res.status(404).json({ error: 'Không có plugin nào được cài trên site này.' });
+  }
+
+  const entry = db.installedPlugins[site].find(p => p.id === pluginId);
+  if (!entry) return res.status(404).json({ error: `Plugin "${pluginId}" chưa được cài trên site này.` });
+
+  entry.config = { ...entry.config, ...config };
+  entry.updatedAt = new Date().toISOString();
+  await writeDb(db);
+
+  res.json({ success: true, message: `Đã cập nhật cấu hình plugin "${pluginId}".`, plugin: entry });
+});
+
+// Hot Router Registry
+const pluginRouters = new Map();
+
+// Helper to dynamic mount plugin router
+async function activatePluginRouter(pluginId) {
+  try {
+    const routePath = path.join(PLUGINS_DIR, pluginId, 'server', 'routes.js');
+    if (existsSync(routePath)) {
+      // Dynamic import
+      const { default: router } = await import(`file://${routePath.replace(/\\/g, '/')}?t=${Date.now()}`);
+      pluginRouters.set(pluginId, router);
+      console.log(`[PLUGIN] Mounted routes for plugin: ${pluginId}`);
+    }
+  } catch (e) {
+    console.error(`[PLUGIN] Failed to mount routes for ${pluginId}:`, e);
+  }
+}
+
+// Global middleware to direct requests to the correct dynamic plugin router
+app.use('/plugins/:pluginId', (req, res, next) => {
+  const { pluginId } = req.params;
+  const router = pluginRouters.get(pluginId);
+  if (router) {
+    return router(req, res, next);
+  }
+  res.status(404).json({ error: `Plugin route not found or not active: ${pluginId}` });
+});
+
+
+async function initInstalledPlugins() {
+  try {
+    const db = await readDb();
+    const installedSet = new Set();
+    Object.values(db.installedPlugins || {}).forEach(arr => {
+      if (Array.isArray(arr)) {
+        arr.forEach(p => installedSet.add(p.id));
+      }
+    });
+    for (const pluginId of installedSet) {
+      await activatePluginRouter(pluginId);
+    }
+  } catch (e) {
+    console.error('[PLUGIN] Error loading installed plugins routing:', e);
+  }
+}
+
+app.listen(PORT, async () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  await initInstalledPlugins();
 });
 

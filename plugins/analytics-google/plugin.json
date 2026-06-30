@@ -1,0 +1,25 @@
+{
+  "id": "analytics-google",
+  "name": "Google Analytics 4",
+  "version": "1.0.0",
+  "author": "TubeCreate",
+  "description": "Tích hợp Google Analytics 4 (GA4) vào mọi trang của website. Theo dõi lượt xem, người dùng, sự kiện và chuyển đổi.",
+  "category": "analytics",
+  "icon": "📊",
+  "color": "#ea580c",
+  "tags": ["analytics", "google", "ga4", "tracking"],
+  "compatibleTemplates": ["travel-shop", "long-chau", "korean-news", "ngo-quyen", "commandcode"],
+  "requiresConfig": [
+    { "key": "GA4_MEASUREMENT_ID", "label": "Measurement ID (G-XXXXXXXXXX)", "type": "text", "required": true }
+  ],
+  "free": true,
+  "hooks": {},
+  "blocks": [
+    {
+      "id": "ga4-script",
+      "label": "Google Analytics Script",
+      "slot": "page.footer_scripts",
+      "description": "Tự động thêm GA4 tracking script vào tất cả các trang"
+    }
+  ]
+}

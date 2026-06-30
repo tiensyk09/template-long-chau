@@ -1,0 +1,23 @@
+{
+  "id": "payment-cod",
+  "name": "Thanh toán khi nhận hàng (COD)",
+  "version": "1.0.0",
+  "author": "TubeCreate",
+  "description": "Phương thức thanh toán tiền mặt khi nhận hàng (Cash on Delivery). Mặc định trong mọi template e-commerce.",
+  "category": "payment",
+  "icon": "💵",
+  "color": "#16a34a",
+  "tags": ["payment", "cod", "cash", "default"],
+  "compatibleTemplates": ["travel-shop", "long-chau"],
+  "requiresConfig": [],
+  "free": true,
+  "hooks": {},
+  "blocks": [
+    {
+      "id": "cod-option",
+      "label": "Thanh toán COD",
+      "slot": "checkout.payment_methods",
+      "description": "Hiển thị tùy chọn thanh toán tiền mặt khi nhận hàng"
+    }
+  ]
+}

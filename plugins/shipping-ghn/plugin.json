@@ -1,0 +1,30 @@
+{
+  "id": "shipping-ghn",
+  "name": "Vận chuyển GHN",
+  "version": "1.0.0",
+  "author": "TubeCreate",
+  "description": "Tích hợp Giao Hàng Nhanh (GHN) để tự động tính phí vận chuyển theo địa chỉ, tạo đơn giao hàng và theo dõi trạng thái.",
+  "category": "shipping",
+  "icon": "🚚",
+  "color": "#dc2626",
+  "tags": ["shipping", "ghn", "delivery", "logistics"],
+  "compatibleTemplates": ["travel-shop", "long-chau"],
+  "requiresConfig": [
+    { "key": "GHN_TOKEN", "label": "GHN API Token", "type": "password", "required": true },
+    { "key": "GHN_SHOP_ID", "label": "Shop ID", "type": "text", "required": true },
+    { "key": "GHN_FROM_DISTRICT_ID", "label": "Quận/Huyện gửi hàng (District ID)", "type": "text", "required": true }
+  ],
+  "free": false,
+  "price": "Liên hệ",
+  "hooks": {
+    "server": "server/routes.js"
+  },
+  "blocks": [
+    {
+      "id": "ghn-shipping-fee",
+      "label": "Tính phí GHN",
+      "slot": "checkout.shipping",
+      "description": "Tự động tính phí vận chuyển GHN theo địa chỉ người mua"
+    }
+  ]
+}

@@ -58,6 +58,11 @@ function generateRandomPassword(length = 12) {
 let allSites = [];
 let allTemplates = [];
 let allProfiles = [];
+let allPlugins = [];
+let installedPlugins = [];
+let currentPluginSite = '';
+let currentPluginCategory = 'all';
+let pluginConfigTarget = null; // { pluginId, site }
 let selectedProfileId = null;
 let currentThemeForCreate = null;
 let currentSiteForLog = null;
@@ -131,6 +136,8 @@ function updateAuthUI() {
   
   if (!profileWrap) return;
   
+  const navPlugins = document.getElementById('nav-plugins');
+
   if (currentUser) {
     profileWrap.innerHTML = `
       <div class="user-info-text">
@@ -142,6 +149,7 @@ function updateAuthUI() {
     if (navSites) navSites.style.display = '';
     if (navConfig) navConfig.style.display = '';
     if (navStorage) navStorage.style.display = isAdmin() ? '' : 'none';
+    if (navPlugins) navPlugins.style.display = '';
   } else {
     profileWrap.innerHTML = `
       <button class="user-profile-btn" onclick="openAuthModal()">🔑 Đăng nhập</button>
@@ -149,6 +157,7 @@ function updateAuthUI() {
     if (navSites) navSites.style.display = 'none';
     if (navConfig) navConfig.style.display = 'none';
     if (navStorage) navStorage.style.display = 'none';
+    if (navPlugins) navPlugins.style.display = 'none';
     switchTab('themes');
   }
 
@@ -323,9 +332,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadAll() {
   if (currentUser) {
-    await Promise.all([loadTemplates(), loadSites(), loadProfiles(), loadStorageServers()]);
+    await Promise.all([loadTemplates(), loadSites(), loadProfiles(), loadStorageServers(), loadPlugins()]);
   } else {
-    await Promise.all([loadTemplates(), loadStorageServers()]);
+    await Promise.all([loadTemplates(), loadStorageServers(), loadPlugins()]);
   }
 }
 
@@ -370,6 +379,7 @@ function switchTab(tab) {
     sites:   ['Websites', 'Quản lý toàn bộ website đã deploy lên Cloudflare'],
     config:  ['Cấu hình Cloudflare', 'Quản lý nhiều tài khoản Cloudflare API'],
     storage: ['Server Bucket', 'Quản lý các máy chủ lưu trữ MinIO / S3 riêng biệt cho hệ thống'],
+    plugins: ['Plugin Marketplace', 'Cài thêm tính năng cho website của bạn'],
   };
   if (titles[tab]) {
     document.getElementById('page-title').textContent = titles[tab][0];
@@ -387,6 +397,15 @@ function switchTab(tab) {
   if (btnAddStorage) btnAddStorage.style.display = (tab === 'storage' && isAdmin()) ? 'inline-flex' : 'none';
   if (btnAddTemplate) {
     btnAddTemplate.style.display = (tab === 'themes' && isAdmin()) ? 'inline-flex' : 'none';
+  }
+  const btnAddPluginStore = document.getElementById('btn-add-plugin-store');
+  if (btnAddPluginStore) {
+    btnAddPluginStore.style.display = (tab === 'plugins' && isAdmin()) ? 'inline-flex' : 'none';
+  }
+
+  // When switching to plugins, populate site selector
+  if (tab === 'plugins') {
+    populatePluginSiteSelector();
   }
 }
 
@@ -1912,4 +1931,391 @@ function bindEvents() {
       btn.textContent = isEdit ? 'Cập nhật Theme' : 'Thêm Theme';
     }
   });
+}
+
+// ============================================================
+// PLUGIN SYSTEM
+// ============================================================
+
+async function loadPlugins() {
+  try {
+    const res = await authFetch('/api/plugins');
+    const data = await res.json();
+    allPlugins = data.plugins || [];
+    // Update nav badge
+    const badge = document.getElementById('nav-plugins-count');
+    if (badge) badge.textContent = allPlugins.length;
+    renderPlugins();
+  } catch (e) {
+    console.error('Failed to load plugins:', e);
+  }
+}
+
+function populatePluginSiteSelector() {
+  const sel = document.getElementById('plugin-site-select');
+  if (!sel) return;
+  const userSites = currentUser
+    ? allSites.filter(s => s.userEmail === currentUser.email || isAdmin())
+    : [];
+  sel.innerHTML = '<option value="">-- Chọn website --</option>' +
+    userSites.map(s => `<option value="${s.name}" ${s.name === currentPluginSite ? 'selected' : ''}>${s.name} (${s.template || 'unknown'})</option>`).join('');
+  if (currentPluginSite) {
+    loadInstalledPlugins(currentPluginSite);
+  }
+}
+
+async function onPluginSiteChange(site) {
+  currentPluginSite = site;
+  if (site) {
+    await loadInstalledPlugins(site);
+  } else {
+    installedPlugins = [];
+    document.getElementById('installed-plugins-section').style.display = 'none';
+  }
+  renderPlugins();
+}
+
+async function loadInstalledPlugins(site) {
+  if (!site) { installedPlugins = []; return; }
+  try {
+    const res = await authFetch(`/api/plugins/installed/${site}`);
+    const data = await res.json();
+    installedPlugins = data.installed || [];
+    renderInstalledPlugins();
+  } catch (e) {
+    installedPlugins = [];
+  }
+}
+
+function filterPlugins(cat, btn) {
+  currentPluginCategory = cat;
+  document.querySelectorAll('.plugin-cat-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderPlugins();
+}
+
+function renderPlugins() {
+  const grid = document.getElementById('plugins-grid');
+  if (!grid) return;
+
+  let filtered = allPlugins;
+  if (currentPluginCategory !== 'all') {
+    filtered = allPlugins.filter(p => p.category === currentPluginCategory);
+  }
+
+  if (!filtered.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🧩</div><h3>Không có plugin nào trong danh mục này.</h3></div>`;
+    return;
+  }
+
+  // Annotate each plugin with its installed state for the current site
+  grid.innerHTML = filtered.map(p => {
+    const isInst = installedPlugins.some(ip => ip.id === p.id);
+    return pluginCardHTML(p, isInst);
+  }).join('');
+}
+
+function renderInstalledPlugins() {
+  const section = document.getElementById('installed-plugins-section');
+  const grid = document.getElementById('installed-plugins-grid');
+  if (!section || !grid) return;
+
+  if (!installedPlugins.length) {
+    section.style.display = 'none';
+    return;
+  }
+
+  // Find full manifests for installed plugins
+  const installedFull = installedPlugins.map(ip => {
+    const manifest = allPlugins.find(p => p.id === ip.id) || { ...ip };
+    return { ...manifest, _installedConfig: ip.config, _installedAt: ip.installedAt };
+  });
+
+  grid.innerHTML = installedFull.map(p => pluginCardHTML(p, true)).join('');
+  section.style.display = 'block';
+}
+
+function pluginCardHTML(plugin, isInstalled) {
+  const color = plugin.color || '#6366f1';
+  const colorRgb = hexToRgb(color);
+  const colorBg = colorRgb ? `rgba(${colorRgb.r},${colorRgb.g},${colorRgb.b},0.12)` : 'rgba(99,102,241,0.12)';
+  const tags = (plugin.tags || []).slice(0, 4).map(t => `<span class="plugin-tag">${t}</span>`).join('');
+
+  const freeBadge = plugin.free
+    ? `<span class="plugin-badge free">Miễn phí</span>`
+    : `<span class="plugin-badge paid">${plugin.price || 'Trả phí'}</span>`;
+
+  const installedBadge = isInstalled ? `<span class="plugin-badge installed">✓ Đã cài</span>` : '';
+
+  const hasConfig = plugin.requiresConfig && plugin.requiresConfig.length > 0;
+  const siteSelected = !!currentPluginSite;
+
+  let footerBtns = '';
+  if (!siteSelected) {
+    footerBtns = `<button class="plugin-install-btn secondary" disabled title="Chọn website trước">Chọn website trước</button>`;
+  } else if (isInstalled) {
+    footerBtns = `
+      ${hasConfig ? `<button class="plugin-config-btn" title="Cấu hình" onclick="openPluginConfig('${plugin.id}')">⚙️</button>` : ''}
+      <button class="plugin-install-btn danger" onclick="uninstallPlugin('${plugin.id}')">🗑 Gỡ cài đặt</button>
+    `;
+  } else {
+    footerBtns = `<button class="plugin-install-btn primary" onclick="installPlugin('${plugin.id}')">⬇ Cài đặt</button>`;
+  }
+
+  return `
+    <div class="plugin-card ${isInstalled ? 'is-installed' : ''}" style="--plugin-color: ${color}; --plugin-color-bg: ${colorBg}">
+      <div class="plugin-card-header">
+        <div class="plugin-icon">${plugin.icon || '🧩'}</div>
+        <div class="plugin-meta">
+          <div class="plugin-name">${plugin.name}</div>
+          <div class="plugin-version">v${plugin.version || '1.0.0'} · ${plugin.author || 'Unknown'}</div>
+          <div class="plugin-badges">${freeBadge}${installedBadge}</div>
+        </div>
+      </div>
+      <div class="plugin-desc">${plugin.description || ''}</div>
+      ${tags ? `<div class="plugin-tags">${tags}</div>` : ''}
+      <div class="plugin-card-footer">${footerBtns}</div>
+    </div>
+  `;
+}
+
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+}
+
+async function installPlugin(pluginId) {
+  if (!currentPluginSite) {
+    alert('Vui lòng chọn website trước.');
+    return;
+  }
+  const plugin = allPlugins.find(p => p.id === pluginId);
+  if (!plugin) return;
+
+  // If plugin requires config, open config modal first
+  if (plugin.requiresConfig && plugin.requiresConfig.length > 0) {
+    pluginConfigTarget = { pluginId, site: currentPluginSite, isNew: true };
+    openPluginConfigModal(plugin, {});
+    return;
+  }
+
+  await doInstallPlugin(pluginId, {});
+}
+
+async function doInstallPlugin(pluginId, config) {
+  try {
+    const res = await authFetch('/api/plugins/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: currentPluginSite, pluginId, config })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Lỗi cài đặt plugin');
+    await loadInstalledPlugins(currentPluginSite);
+    renderPlugins();
+    showPluginToast(`✅ Đã cài "${data.plugin?.name || pluginId}" cho ${currentPluginSite}`);
+  } catch (err) {
+    alert('Lỗi: ' + err.message);
+  }
+}
+
+async function uninstallPlugin(pluginId) {
+  const plugin = allPlugins.find(p => p.id === pluginId);
+  const name = plugin?.name || pluginId;
+  if (!confirm(`Bạn có chắc muốn gỡ plugin "${name}" khỏi ${currentPluginSite}?`)) return;
+
+  try {
+    const res = await authFetch('/api/plugins/uninstall', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ site: currentPluginSite, pluginId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Lỗi gỡ plugin');
+    await loadInstalledPlugins(currentPluginSite);
+    renderPlugins();
+    showPluginToast(`🗑 Đã gỡ "${name}" khỏi ${currentPluginSite}`);
+  } catch (err) {
+    alert('Lỗi: ' + err.message);
+  }
+}
+
+function openPluginConfig(pluginId) {
+  const plugin = allPlugins.find(p => p.id === pluginId);
+  if (!plugin) return;
+  const installed = installedPlugins.find(ip => ip.id === pluginId);
+  pluginConfigTarget = { pluginId, site: currentPluginSite, isNew: false };
+  openPluginConfigModal(plugin, installed?.config || {});
+}
+
+function openPluginConfigModal(plugin, existingConfig) {
+  document.getElementById('plugin-config-icon').textContent = plugin.icon || '🧩';
+  document.getElementById('plugin-config-title').textContent = `Cấu hình: ${plugin.name}`;
+  document.getElementById('plugin-config-site-label').textContent = `Website: ${currentPluginSite}`;
+
+  const fieldsEl = document.getElementById('plugin-config-fields');
+  fieldsEl.innerHTML = (plugin.requiresConfig || []).map(field => `
+    <div class="plugin-config-field">
+      <label for="pcfg-${field.key}">${field.label}${field.required ? ' <span style="color:var(--red)">*</span>' : ''}</label>
+      <input
+        type="${field.type === 'password' ? 'password' : 'text'}"
+        id="pcfg-${field.key}"
+        data-key="${field.key}"
+        value="${existingConfig[field.key] || field.default || ''}"
+        placeholder="${field.default || ''}"
+        ${field.required ? 'required' : ''}
+      >
+      ${field.hint ? `<div class="field-hint">${field.hint}</div>` : ''}
+    </div>
+  `).join('');
+
+  document.getElementById('plugin-config-modal').style.display = 'flex';
+}
+
+function closePluginConfigModal() {
+  document.getElementById('plugin-config-modal').style.display = 'none';
+  pluginConfigTarget = null;
+}
+
+async function savePluginConfig() {
+  if (!pluginConfigTarget) return;
+  const { pluginId, site, isNew } = pluginConfigTarget;
+  const plugin = allPlugins.find(p => p.id === pluginId);
+
+  const config = {};
+  const fields = document.querySelectorAll('#plugin-config-fields [data-key]');
+  for (const input of fields) {
+    const key = input.dataset.key;
+    const field = (plugin?.requiresConfig || []).find(f => f.key === key);
+    if (field?.required && !input.value.trim()) {
+      alert(`Vui lòng điền "${field.label}".`);
+      input.focus();
+      return;
+    }
+    config[key] = input.value.trim();
+  }
+
+  closePluginConfigModal();
+
+  if (isNew) {
+    await doInstallPlugin(pluginId, config);
+  } else {
+    try {
+      const res = await authFetch('/api/plugins/configure', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site, pluginId, config })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Lỗi lưu cấu hình');
+      await loadInstalledPlugins(site);
+      showPluginToast('✅ Đã lưu cấu hình plugin.');
+    } catch (err) {
+      alert('Lỗi: ' + err.message);
+    }
+  }
+}
+
+function showPluginToast(msg) {
+  let toast = document.getElementById('plugin-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'plugin-toast';
+    toast.style.cssText = `
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      background: #1c2030; border: 1px solid rgba(99,102,241,0.4);
+      color: #f0f2f8; padding: 12px 20px; border-radius: 10px;
+      font-size: 13px; font-weight: 600; font-family: 'Outfit', sans-serif;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      transform: translateY(80px); opacity: 0;
+      transition: all 0.3s ease;
+    `;
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  requestAnimationFrame(() => {
+    toast.style.transform = 'translateY(0)';
+    toast.style.opacity = '1';
+  });
+  setTimeout(() => {
+    toast.style.transform = 'translateY(80px)';
+    toast.style.opacity = '0';
+  }, 3000);
+}
+
+// Admin: Add Plugin to Store UI helpers
+function openAddPluginStoreModal() {
+  document.getElementById('add-plugin-store-form').reset();
+  document.getElementById('pstore-price-wrap').style.display = 'none';
+  document.getElementById('add-plugin-store-modal').style.display = 'flex';
+}
+
+function closeAddPluginStoreModal() {
+  document.getElementById('add-plugin-store-modal').style.display = 'none';
+}
+
+function togglePStorePriceField(val) {
+  const priceWrap = document.getElementById('pstore-price-wrap');
+  if (val === 'paid') {
+    priceWrap.style.display = 'block';
+    document.getElementById('pstore-price').setAttribute('required', 'true');
+  } else {
+    priceWrap.style.display = 'none';
+    document.getElementById('pstore-price').removeAttribute('required');
+  }
+}
+
+async function submitAddPluginStore(e) {
+  e.preventDefault();
+  
+  const id = document.getElementById('pstore-id').value.trim();
+  const name = document.getElementById('pstore-name').value.trim();
+  const githubUrl = document.getElementById('pstore-githuburl').value.trim();
+  const category = document.getElementById('pstore-category').value;
+  const description = document.getElementById('pstore-desc').value.trim();
+  const icon = document.getElementById('pstore-icon').value.trim() || '🧩';
+  const color = document.getElementById('pstore-color').value.trim() || '#6366f1';
+  
+  const rawTags = document.getElementById('pstore-tags').value.trim();
+  const tags = rawTags ? rawTags.split(',').map(t => t.trim()).filter(Boolean) : [];
+  
+  const priceType = document.getElementById('pstore-price-type').value;
+  const free = priceType === 'free';
+  const price = free ? '' : document.getElementById('pstore-price').value.trim();
+  
+  const configJsonStr = document.getElementById('pstore-config-json').value.trim();
+  let requiresConfig = [];
+  if (configJsonStr) {
+    try {
+      requiresConfig = JSON.parse(configJsonStr);
+      if (!Array.isArray(requiresConfig)) {
+        throw new Error('JSON phải là một mảng dữ liệu (Array).');
+      }
+    } catch (err) {
+      alert('Định dạng cấu hình JSON không hợp lệ: ' + err.message);
+      return;
+    }
+  }
+
+  try {
+    const res = await authFetch('/api/plugin-store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id, name, description, githubUrl, category, icon, color, tags, free, price, requiresConfig
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Lỗi thêm plugin vào store');
+    
+    closeAddPluginStoreModal();
+    showPluginToast('✅ Thêm plugin vào Store thành công!');
+    await loadPlugins(); // Tải lại danh sách plugins
+  } catch (err) {
+    alert('Lỗi: ' + err.message);
+  }
 }

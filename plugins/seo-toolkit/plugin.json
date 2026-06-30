@@ -1,0 +1,25 @@
+{
+  "id": "seo-toolkit",
+  "name": "SEO Toolkit",
+  "version": "1.0.0",
+  "author": "TubeCreate",
+  "description": "Bộ công cụ SEO toàn diện: tự động sinh sitemap.xml, robots.txt, Open Graph tags, structured data (JSON-LD), và phân tích mật độ từ khóa.",
+  "category": "seo",
+  "icon": "🔍",
+  "color": "#0891b2",
+  "tags": ["seo", "sitemap", "meta", "og", "schema"],
+  "compatibleTemplates": ["travel-shop", "long-chau", "korean-news", "ngo-quyen", "commandcode"],
+  "requiresConfig": [],
+  "free": true,
+  "hooks": {
+    "server": "server/routes.js"
+  },
+  "blocks": [
+    {
+      "id": "seo-meta-injector",
+      "label": "SEO Meta Tags",
+      "slot": "page.head",
+      "description": "Tự động thêm Open Graph, Twitter Card và JSON-LD vào mỗi trang"
+    }
+  ]
+}

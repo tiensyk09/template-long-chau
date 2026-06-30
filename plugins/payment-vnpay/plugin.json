@@ -1,0 +1,30 @@
+{
+  "id": "payment-vnpay",
+  "name": "Thanh toán VNPay",
+  "version": "1.0.0",
+  "author": "TubeCreate",
+  "description": "Tích hợp cổng thanh toán VNPay - hỗ trợ thẻ ATM nội địa, Visa/Mastercard, QR code ngân hàng.",
+  "category": "payment",
+  "icon": "🏦",
+  "color": "#1d4ed8",
+  "tags": ["payment", "vnpay", "atm", "card", "qr"],
+  "compatibleTemplates": ["travel-shop", "long-chau"],
+  "requiresConfig": [
+    { "key": "VNPAY_TMN_CODE", "label": "Terminal Code (TMN Code)", "type": "text", "required": true },
+    { "key": "VNPAY_HASH_SECRET", "label": "Hash Secret", "type": "password", "required": true },
+    { "key": "VNPAY_URL", "label": "VNPay URL", "type": "text", "required": false, "default": "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html" }
+  ],
+  "free": false,
+  "price": "Liên hệ",
+  "hooks": {
+    "server": "server/routes.js"
+  },
+  "blocks": [
+    {
+      "id": "vnpay-payment-button",
+      "label": "Thanh toán VNPay",
+      "slot": "checkout.payment_methods",
+      "description": "Hỗ trợ ATM nội địa, Visa/Mastercard và QR ngân hàng"
+    }
+  ]
+}
