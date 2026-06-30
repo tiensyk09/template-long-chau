@@ -7,6 +7,7 @@ import { spawn } from 'child_process';
 import crypto from 'crypto';
 
 
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -501,11 +502,31 @@ async function loadAllPlugins() {
   return Array.from(pluginsMap.values());
 }
 
-// Database helper functions
+// Database helper functions using remote PHP API
 async function readDb() {
   try {
-    const data = await fs.readFile(DB_FILE, 'utf8');
-    const parsed = JSON.parse(data);
+    const res = await fetch('https://api.tubecreate.com/api/manager/db.php');
+    if (!res.ok) {
+      throw new Error(`PHP API returned status ${res.status}`);
+    }
+    const parsed = await res.json();
+    
+    // If the database is empty or new, it returns an empty object
+    if (!parsed || Object.keys(parsed).length === 0) {
+      console.log('Remote state is empty. Initializing default state...');
+      const defaultDb = { 
+        sites: [], 
+        cfProfiles: [], 
+        templates: DEFAULT_TEMPLATES, 
+        storageServers: DEFAULT_STORAGE_SERVERS, 
+        installedPlugins: {},
+        pluginStore: DEFAULT_PLUGIN_STORE
+      };
+      await writeDb(defaultDb);
+      return defaultDb;
+    }
+    
+    // Ensure basic arrays and objects exist
     if (!parsed.sites) parsed.sites = [];
     if (!parsed.cfProfiles) parsed.cfProfiles = [];
     if (!parsed.installedPlugins) parsed.installedPlugins = {};
@@ -528,12 +549,16 @@ async function readDb() {
       parsed.pluginStore = DEFAULT_PLUGIN_STORE;
       modified = true;
     }
+    
     if (modified) {
       await writeDb(parsed);
     }
+    
     return parsed;
   } catch (err) {
-    const db = { 
+    console.error('Failed to read database state from PHP API:', err);
+    // Fallback to local default state if connection/API fails
+    return { 
       sites: [], 
       cfProfiles: [], 
       templates: DEFAULT_TEMPLATES, 
@@ -541,13 +566,23 @@ async function readDb() {
       installedPlugins: {},
       pluginStore: DEFAULT_PLUGIN_STORE
     };
-    await writeDb(db);
-    return db;
   }
 }
 
 async function writeDb(data) {
-  await fs.writeFile(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+  try {
+    const res = await fetch('https://api.tubecreate.com/api/manager/db.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      throw new Error(`PHP API returned status ${res.status}`);
+    }
+  } catch (err) {
+    console.error('Failed to write database state to PHP API:', err);
+    throw err;
+  }
 }
 
 // API Endpoints
