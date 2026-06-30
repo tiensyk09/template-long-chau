@@ -1304,7 +1304,7 @@ export default config;
     const sqlCommand = `
       INSERT OR REPLACE INTO settings (key, value) VALUES ('${settingKey}', '${escapedTitle}');
       INSERT OR REPLACE INTO settings (key, value) VALUES ('site_name', '${siteName}');
-      INSERT OR REPLACE INTO settings (key, value) VALUES ('manager_url', 'http://localhost:3000');
+      INSERT OR REPLACE INTO settings (key, value) VALUES ('manager_url', 'https://autoweb.tubecreate.com');
     `;
     await runCommand('npx', ['wrangler', 'd1', 'execute', dbName, '--remote', `--command=${JSON.stringify(sqlCommand)}`], envOptions, siteName);
     await writeLog(siteName, `[D1] Đã ghi cấu hình site_name, manager_url và tiêu đề website: "${escapedTitle}"\n`);

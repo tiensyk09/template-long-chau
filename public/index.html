@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
 </head>
 <body>
   <div class="glow-bg"></div>
@@ -17,7 +18,9 @@
     <!-- ===== SIDEBAR ===== -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
-        <div class="brand-icon">⚡</div>
+        <div class="brand-icon">
+          <span class="material-symbols-outlined" style="font-size:22px; color:white;">bolt</span>
+        </div>
         <div class="brand-text">
           <span class="brand-name">AutoWeb</span>
           <span class="brand-sub">CMS</span>
@@ -26,26 +29,26 @@
 
       <nav class="sidebar-nav">
         <button class="nav-item active" id="nav-themes" onclick="switchTab('themes')">
-          <span class="nav-icon">🎨</span>
+          <span class="nav-icon"><span class="material-symbols-outlined">palette</span></span>
           <span class="nav-label">Chọn Theme</span>
         </button>
         <button class="nav-item" id="nav-sites" onclick="switchTab('sites')">
-          <span class="nav-icon">🌐</span>
+          <span class="nav-icon"><span class="material-symbols-outlined">language</span></span>
           <span class="nav-label">Websites</span>
           <span class="nav-badge" id="nav-sites-count">0</span>
         </button>
         <button class="nav-item" id="nav-config" onclick="switchTab('config')">
-          <span class="nav-icon">⚙️</span>
+          <span class="nav-icon"><span class="material-symbols-outlined">settings</span></span>
           <span class="nav-label">Cấu hình CF</span>
           <span class="nav-badge" id="nav-config-count">0</span>
         </button>
         <button class="nav-item" id="nav-storage" onclick="switchTab('storage')">
-          <span class="nav-icon">🪣</span>
+          <span class="nav-icon"><span class="material-symbols-outlined">database</span></span>
           <span class="nav-label">Server Bucket</span>
           <span class="nav-badge" id="nav-storage-count">0</span>
         </button>
         <button class="nav-item" id="nav-plugins" onclick="switchTab('plugins')">
-          <span class="nav-icon">🧩</span>
+          <span class="nav-icon"><span class="material-symbols-outlined">extension</span></span>
           <span class="nav-label">Plugins</span>
           <span class="nav-badge" id="nav-plugins-count">0</span>
         </button>
@@ -81,16 +84,16 @@
             <input type="text" id="search-input" class="topbar-search" placeholder="Tìm kiếm website...">
           </div>
           <button class="btn btn-primary" id="btn-add-cf-profile" style="display:none" onclick="openAddProfileModal()">
-            <span>+</span> Thêm cấu hình
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Thêm cấu hình
           </button>
           <button class="btn btn-primary" id="btn-add-storage-server" style="display:none" onclick="openAddStorageServerModal()">
-            <span>+</span> Thêm Storage Server
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Thêm Storage Server
           </button>
           <button class="btn btn-primary" id="btn-add-template" style="display:none" onclick="openCreateTemplateModal()">
-            <span>+</span> Thêm Theme
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Thêm Theme
           </button>
           <button class="btn btn-primary" id="btn-add-plugin-store" style="display:none" onclick="openAddPluginStoreModal()">
-            <span>+</span> Thêm Plugin Store
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Thêm Plugin Store
           </button>
           <div class="user-profile-wrap" id="user-profile-wrap"></div>
         </div>
@@ -183,44 +186,74 @@
 
       <!-- ===== TAB: PLUGINS ===== -->
       <section class="tab-panel" id="tab-plugins">
-        <div class="config-intro">
-          <div class="config-intro-icon">🧩</div>
-          <div>
-            <h3>Plugin Marketplace</h3>
-            <p>Cài thêm tính năng cho website: thanh toán, vận chuyển, analytics, live chat và nhiều hơn nữa.</p>
+        <div class="plugin-layout">
+
+          <!-- LEFT: Website list -->
+          <div class="plugin-sites-panel" id="plugin-sites-panel">
+            <div class="plugin-sites-header">
+              <span class="plugin-sites-title">🌐 Websites</span>
+              <span class="plugin-sites-hint">Chọn site để quản lý</span>
+            </div>
+            <div class="plugin-sites-list" id="plugin-sites-list">
+              <div class="plugin-site-loading">Đang tải...</div>
+            </div>
           </div>
-        </div>
 
-        <!-- Site selector -->
-        <div class="plugin-site-selector" id="plugin-site-selector">
-          <label for="plugin-site-select">📦 Cài plugin cho website:</label>
-          <select id="plugin-site-select" onchange="onPluginSiteChange(this.value)">
-            <option value="">-- Chọn website --</option>
-          </select>
-        </div>
+          <!-- RIGHT: Marketplace -->
+          <div class="plugin-market-panel" id="plugin-market-panel">
+            <!-- Header of market panel -->
+            <div class="plugin-market-header">
+              <div class="plugin-market-title-row">
+                <div>
+                  <div class="plugin-market-site-label" id="plugin-market-site-label">
+                    <span class="pml-dot"></span>
+                    <span id="plugin-market-site-name">Chọn website bên trái</span>
+                  </div>
+                  <div class="plugin-market-subtitle" id="plugin-market-subtitle">Plugin Marketplace — Cài thêm tính năng cho website của bạn</div>
+                </div>
+                <div class="plugin-market-stats" id="plugin-market-stats" style="display:none">
+                  <div class="pm-stat">
+                    <span class="pm-stat-val" id="pm-stat-installed">0</span>
+                    <span class="pm-stat-lbl">Đã cài</span>
+                  </div>
+                  <div class="pm-stat">
+                    <span class="pm-stat-val" id="pm-stat-available">0</span>
+                    <span class="pm-stat-lbl">Có thể cài</span>
+                  </div>
+                </div>
+              </div>
 
-        <!-- Category filter -->
-        <div class="plugin-category-bar" id="plugin-category-bar">
-          <button class="plugin-cat-btn active" data-cat="all" onclick="filterPlugins('all', this)">🔮 Tất cả</button>
-          <button class="plugin-cat-btn" data-cat="payment" onclick="filterPlugins('payment', this)">💳 Thanh toán</button>
-          <button class="plugin-cat-btn" data-cat="shipping" onclick="filterPlugins('shipping', this)">🚚 Vận chuyển</button>
-          <button class="plugin-cat-btn" data-cat="seo" onclick="filterPlugins('seo', this)">🔍 SEO</button>
-          <button class="plugin-cat-btn" data-cat="analytics" onclick="filterPlugins('analytics', this)">📊 Analytics</button>
-          <button class="plugin-cat-btn" data-cat="support" onclick="filterPlugins('support', this)">💬 Hỗ trợ</button>
-        </div>
+              <!-- Category filter -->
+              <div class="plugin-category-bar" id="plugin-category-bar">
+                <button class="plugin-cat-btn active" data-cat="all" onclick="filterPlugins('all', this)">🔮 Tất cả</button>
+                <button class="plugin-cat-btn" data-cat="payment" onclick="filterPlugins('payment', this)">💳 Thanh toán</button>
+                <button class="plugin-cat-btn" data-cat="shipping" onclick="filterPlugins('shipping', this)">🚚 Vận chuyển</button>
+                <button class="plugin-cat-btn" data-cat="seo" onclick="filterPlugins('seo', this)">🔍 SEO</button>
+                <button class="plugin-cat-btn" data-cat="analytics" onclick="filterPlugins('analytics', this)">📊 Analytics</button>
+                <button class="plugin-cat-btn" data-cat="support" onclick="filterPlugins('support', this)">💬 Hỗ trợ</button>
+              </div>
+            </div>
 
-        <!-- Plugins grid -->
-        <div class="plugins-grid" id="plugins-grid">
-          <div class="empty-state">
-            <div class="empty-icon">🧩</div>
-            <h3>Đang tải plugins...</h3>
+            <!-- Scrollable content area -->
+            <div class="plugin-market-content">
+              <!-- Installed plugins section -->
+              <div id="installed-plugins-section" style="display:none">
+                <div class="plugin-section-label">✅ Đã cài trên site này</div>
+                <div class="plugins-grid" id="installed-plugins-grid"></div>
+              </div>
+
+              <!-- Available plugins grid -->
+              <div class="plugin-section-label" id="available-section-label" style="display:none">🧩 Có thể cài thêm</div>
+              <div class="plugins-grid" id="plugins-grid">
+                <div class="empty-state">
+                  <div class="empty-icon">🧩</div>
+                  <h3>Đang tải plugins...</h3>
+                </div>
+              </div>
+            </div>
+
           </div>
-        </div>
 
-        <!-- Installed plugins for current site -->
-        <div id="installed-plugins-section" style="display:none">
-          <h3 style="margin: 32px 0 16px; font-size: 16px; font-weight: 700; color: var(--text-main);">✅ Đã cài trên website này</h3>
-          <div class="plugins-grid" id="installed-plugins-grid"></div>
         </div>
       </section>
     </div>
@@ -904,6 +937,10 @@ response = requests.post(
       <div class="modal-footer" style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px;">
         <button class="btn btn-secondary" onclick="closePluginConfigModal()">Hủy</button>
         <button class="btn btn-primary" id="btn-save-plugin-config" onclick="savePluginConfig()">Lưu cấu hình</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===================================================== -->
   <!-- MODAL: ADD PLUGIN TO STORE (Admin only)              -->
   <!-- ===================================================== -->
@@ -947,16 +984,68 @@ response = requests.post(
           <textarea id="pstore-desc" rows="3" placeholder="Mô tả chức năng plugin..."></textarea>
         </div>
 
-        <div class="form-group-row">
-          <div class="form-group">
-            <label for="pstore-icon">Emoji Icon</label>
-            <input type="text" id="pstore-icon" placeholder="Ví dụ: 💳" value="🧩">
+        <!-- Visual Icon Picker + Color Picker -->
+        <div class="form-group" id="pstore-icon-section">
+          <div class="form-group-row" style="margin-bottom:10px;">
+            <div class="form-group">
+              <label for="pstore-icon-select">Emoji Icon</label>
+              <div style="display:flex; gap:8px;">
+                <select id="pstore-icon-select" onchange="syncSelectIconToVisual(this.value)" style="flex:1; background:var(--bg-surface); border:1px solid var(--border-light); color:var(--text-primary); padding:10px; border-radius:var(--radius-sm); font-size:13px; font-family:var(--font);">
+                  <option value="🧩">🧩 Tiêu chuẩn (Puzzle)</option>
+                  <option value="💳">💳 Thanh toán (Card)</option>
+                  <option value="🚚">🚚 Vận chuyển (Truck)</option>
+                  <option value="📊">📊 Analytics (Chart)</option>
+                  <option value="🔍">🔍 SEO (Search)</option>
+                  <option value="💬">💬 Hỗ trợ (Chat)</option>
+                  <option value="custom">✨ Tùy chỉnh nâng cao / SVG...</option>
+                </select>
+                <button type="button" class="btn btn-secondary" onclick="toggleAdvancedIconPicker()" id="btn-toggle-design-icon" style="white-space:nowrap; display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:10px 14px;">🎨 Thiết kế Icon</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="pstore-color-simple">Màu chủ đạo (Hex/Color)</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="color" id="pstore-color-simple-picker" value="#6366f1" oninput="syncSimpleColorPickerToText(this.value)" style="width:38px; height:38px; padding:0; border:1px solid var(--border-light); border-radius:var(--radius-sm); cursor:pointer; background:transparent; flex-shrink:0;">
+                <input type="text" id="pstore-color-simple" placeholder="Ví dụ: #6366f1" value="#6366f1" oninput="syncSimpleColorToVisual(this.value)" style="flex:1;">
+              </div>
+            </div>
           </div>
-          <div class="form-group">
-            <label for="pstore-color">Màu chủ đạo (Hex/Color)</label>
-            <input type="text" id="pstore-color" placeholder="Ví dụ: #6366f1" value="#6366f1">
+
+          <div class="icon-picker-layout" id="icon-picker-layout-advanced" style="display:none; margin-top:10px;">
+            <!-- LEFT: Icon grid -->
+            <div class="icon-picker-grid-wrap">
+              <div class="icon-picker-preview" id="icon-picker-preview">🧩</div>
+              <div class="icon-picker-cats" id="icon-picker-cats">
+                <button type="button" class="icon-cat-btn active" data-cat="all" onclick="filterIconCat('all',this)">Tất cả</button>
+                <button type="button" class="icon-cat-btn" data-cat="payment" onclick="filterIconCat('payment',this)">💳</button>
+                <button type="button" class="icon-cat-btn" data-cat="shipping" onclick="filterIconCat('shipping',this)">🚚</button>
+                <button type="button" class="icon-cat-btn" data-cat="analytics" onclick="filterIconCat('analytics',this)">📊</button>
+                <button type="button" class="icon-cat-btn" data-cat="seo" onclick="filterIconCat('seo',this)">🔍</button>
+                <button type="button" class="icon-cat-btn" data-cat="support" onclick="filterIconCat('support',this)">💬</button>
+              </div>
+              <div class="icon-picker-grid" id="icon-picker-grid">
+                <!-- Populated by JS -->
+              </div>
+              <button type="button" class="btn-upload-svg" onclick="triggerSvgUpload()">
+                📤 Tải SVG / Ảnh
+              </button>
+              <input type="file" id="pstore-icon-file" accept=".svg,image/*" style="display:none" onchange="handleSvgUpload(event)">
+            </div>
+            <!-- RIGHT: Color palette -->
+            <div class="color-picker-wrap">
+              <div class="color-picker-label">Màu chủ đạo</div>
+              <div class="color-palette" id="color-palette">
+                <!-- Populated by JS -->
+              </div>
+              <div class="color-custom-row">
+                <input type="color" id="pstore-color-native" oninput="selectColorCustom(this.value)" title="Chọn màu tùy chỉnh">
+                <input type="text" id="pstore-color" placeholder="#6366f1" value="#6366f1" oninput="applyColorFromHex(this.value)" style="flex:1;">
+              </div>
+            </div>
           </div>
+          <input type="hidden" id="pstore-icon" value="🧩">
         </div>
+
 
         <div class="form-group-row">
           <div class="form-group">
@@ -977,10 +1066,22 @@ response = requests.post(
           <input type="text" id="pstore-price" placeholder="Ví dụ: Liên hệ hoặc 500,000đ">
         </div>
 
-        <div class="form-group">
-          <label for="pstore-config-json">Yêu cầu cấu hình (JSON Array) — Optional</label>
-          <textarea id="pstore-config-json" rows="3" placeholder='Ví dụ: [{"key":"API_KEY","label":"API Key","type":"text","required":true}]'></textarea>
-          <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Nhập mảng JSON cấu hình nếu plugin yêu cầu cài đặt tham số từ user.</div>
+        <!-- Visual config field builder -->
+        <div class="form-group" id="pstore-config-section">
+          <div class="pstore-config-header">
+            <div>
+              <label style="margin-bottom:2px; display:block;">⚙️ Yêu cầu cấu hình từ người dùng</label>
+              <div style="font-size:11px; color:var(--text-muted);">Các API key, token, secret mà người dùng phải nhập khi cài plugin. Không cần nếu plugin không có tham số nào.</div>
+            </div>
+            <button type="button" class="btn-add-config-field" onclick="addConfigFieldRow()">+ Thêm trường</button>
+          </div>
+
+          <div id="pstore-config-rows">
+            <!-- Config field rows injected by JS -->
+            <div class="pstore-config-empty" id="pstore-config-empty">
+              <span>Không có trường nào — plugin không cần cấu hình</span>
+            </div>
+          </div>
         </div>
 
         <div class="modal-footer" style="padding-bottom:0; margin-top:16px;">

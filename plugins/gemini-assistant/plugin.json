@@ -1,0 +1,19 @@
+{
+  "id": "gemini-assistant",
+  "name": "Gemini Flash AI Assistant",
+  "version": "1.0.0",
+  "author": "tiensyk09",
+  "description": "Tích hợp trợ lý AI Gemini 2.5 Flash để tự động trả lời câu hỏi của khách hàng, tư vấn sản phẩm.",
+  "category": "support",
+  "icon": "🤖",
+  "color": "#10b981",
+  "tags": ["gemini", "assistant", "ai", "chat"],
+  "compatibleTemplates": ["travel-shop", "long-chau"],
+  "requiresConfig": [
+    { "key": "GEMINI_API_KEY", "label": "Gemini API Key", "type": "password", "required": true }
+  ],
+  "free": true,
+  "hooks": {
+    "server": "server/routes.js"
+  }
+}

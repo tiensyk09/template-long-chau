@@ -403,9 +403,9 @@ function switchTab(tab) {
     btnAddPluginStore.style.display = (tab === 'plugins' && isAdmin()) ? 'inline-flex' : 'none';
   }
 
-  // When switching to plugins, populate site selector
+  // When switching to plugins, render site list
   if (tab === 'plugins') {
-    populatePluginSiteSelector();
+    renderPluginSiteList();
   }
 }
 
@@ -1951,28 +1951,98 @@ async function loadPlugins() {
   }
 }
 
-function populatePluginSiteSelector() {
-  const sel = document.getElementById('plugin-site-select');
-  if (!sel) return;
+function renderPluginSiteList() {
+  const list = document.getElementById('plugin-sites-list');
+  if (!list) return;
+
   const userSites = currentUser
     ? allSites.filter(s => s.userEmail === currentUser.email || isAdmin())
     : [];
-  sel.innerHTML = '<option value="">-- Chọn website --</option>' +
-    userSites.map(s => `<option value="${s.name}" ${s.name === currentPluginSite ? 'selected' : ''}>${s.name} (${s.template || 'unknown'})</option>`).join('');
-  if (currentPluginSite) {
-    loadInstalledPlugins(currentPluginSite);
+
+  if (!userSites.length) {
+    list.innerHTML = '<div class="plugin-site-loading">Chưa có website nào</div>';
+    return;
+  }
+
+  list.innerHTML = userSites.map(s => {
+    const installedCount = (s._pluginCount !== undefined) ? s._pluginCount : 0;
+    const isActive = s.name === currentPluginSite;
+    return `
+      <div class="plugin-site-item${isActive ? ' active' : ''}" onclick="selectPluginSite('${s.name}')">
+        <span class="plugin-site-icon">🌐</span>
+        <div class="plugin-site-info">
+          <div class="plugin-site-name">${s.name}</div>
+          <div class="plugin-site-template">${s.template || 'unknown'}</div>
+        </div>
+        <span class="plugin-site-count${installedCount === 0 ? ' zero' : ''}">${installedCount}</span>
+      </div>
+    `;
+  }).join('');
+
+  // Auto-select first site if none selected
+  if (!currentPluginSite && userSites.length > 0) {
+    selectPluginSite(userSites[0].name);
+  } else if (currentPluginSite) {
+    loadInstalledPlugins(currentPluginSite).then(() => {
+      renderPlugins();
+      updatePluginMarketHeader();
+    });
   }
 }
 
-async function onPluginSiteChange(site) {
-  currentPluginSite = site;
-  if (site) {
-    await loadInstalledPlugins(site);
-  } else {
-    installedPlugins = [];
-    document.getElementById('installed-plugins-section').style.display = 'none';
-  }
+async function selectPluginSite(siteName) {
+  currentPluginSite = siteName;
+
+  // Update active state in site list
+  document.querySelectorAll('.plugin-site-item').forEach(el => el.classList.remove('active'));
+  const items = document.querySelectorAll('.plugin-site-item');
+  items.forEach(el => {
+    if (el.querySelector('.plugin-site-name')?.textContent === siteName) {
+      el.classList.add('active');
+    }
+  });
+
+  await loadInstalledPlugins(siteName);
+  updatePluginMarketHeader();
   renderPlugins();
+  renderInstalledPlugins();
+}
+
+function updatePluginMarketHeader() {
+  const nameEl = document.getElementById('plugin-market-site-name');
+  const statsEl = document.getElementById('plugin-market-stats');
+  const instEl = document.getElementById('pm-stat-installed');
+  const availEl = document.getElementById('pm-stat-available');
+
+  if (nameEl) nameEl.textContent = currentPluginSite || 'Chọn website bên trái';
+  if (currentPluginSite && statsEl) {
+    statsEl.style.display = 'flex';
+    if (instEl) instEl.textContent = installedPlugins.length;
+    if (availEl) availEl.textContent = allPlugins.length - installedPlugins.length;
+  } else if (statsEl) {
+    statsEl.style.display = 'none';
+  }
+
+  // Update site count badges in left panel after loading installed
+  updateSiteCountBadge(currentPluginSite, installedPlugins.length);
+}
+
+function updateSiteCountBadge(siteName, count) {
+  const items = document.querySelectorAll('.plugin-site-item');
+  items.forEach(el => {
+    if (el.querySelector('.plugin-site-name')?.textContent === siteName) {
+      const badge = el.querySelector('.plugin-site-count');
+      if (badge) {
+        badge.textContent = count;
+        badge.className = 'plugin-site-count' + (count === 0 ? ' zero' : '');
+      }
+    }
+  });
+}
+
+async function onPluginSiteChange(site) {
+  // Legacy: still keep for backward compat if dropdown exists
+  await selectPluginSite(site);
 }
 
 async function loadInstalledPlugins(site) {
@@ -1996,6 +2066,7 @@ function filterPlugins(cat, btn) {
 
 function renderPlugins() {
   const grid = document.getElementById('plugins-grid');
+  const availLabel = document.getElementById('available-section-label');
   if (!grid) return;
 
   let filtered = allPlugins;
@@ -2003,16 +2074,30 @@ function renderPlugins() {
     filtered = allPlugins.filter(p => p.category === currentPluginCategory);
   }
 
-  if (!filtered.length) {
-    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🧩</div><h3>Không có plugin nào trong danh mục này.</h3></div>`;
+  // Split installed vs not installed
+  const installed = filtered.filter(p => installedPlugins.some(ip => ip.id === p.id));
+  const available = filtered.filter(p => !installedPlugins.some(ip => ip.id === p.id));
+
+  // Show installed section separately
+  renderInstalledPlugins();
+
+  // Show available section label only if site selected and there are installed
+  if (availLabel) {
+    availLabel.style.display = (currentPluginSite && installed.length > 0 && available.length > 0) ? 'block' : 'none';
+  }
+
+  if (!available.length) {
+    if (!currentPluginSite) {
+      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🌐</div><h3>Chọn website để xem plugin phù hợp</h3><p style="color:var(--text-muted);font-size:13px;margin-top:8px">Nhấp vào tên website ở panel bên trái</p></div>`;
+    } else if (installed.length > 0) {
+      grid.innerHTML = '';
+    } else {
+      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><h3>Không còn plugin nào để cài thêm</h3></div>`;
+    }
     return;
   }
 
-  // Annotate each plugin with its installed state for the current site
-  grid.innerHTML = filtered.map(p => {
-    const isInst = installedPlugins.some(ip => ip.id === p.id);
-    return pluginCardHTML(p, isInst);
-  }).join('');
+  grid.innerHTML = available.map(p => pluginCardHTML(p, false)).join('');
 }
 
 function renderInstalledPlugins() {
@@ -2020,13 +2105,21 @@ function renderInstalledPlugins() {
   const grid = document.getElementById('installed-plugins-grid');
   if (!section || !grid) return;
 
-  if (!installedPlugins.length) {
+  // Apply category filter to installed plugins too
+  let filtered = installedPlugins;
+  if (currentPluginCategory !== 'all') {
+    filtered = installedPlugins.filter(ip => {
+      const manifest = allPlugins.find(p => p.id === ip.id);
+      return manifest && manifest.category === currentPluginCategory;
+    });
+  }
+
+  if (!filtered.length || !currentPluginSite) {
     section.style.display = 'none';
     return;
   }
 
-  // Find full manifests for installed plugins
-  const installedFull = installedPlugins.map(ip => {
+  const installedFull = filtered.map(ip => {
     const manifest = allPlugins.find(p => p.id === ip.id) || { ...ip };
     return { ...manifest, _installedConfig: ip.config, _installedAt: ip.installedAt };
   });
@@ -2062,10 +2155,16 @@ function pluginCardHTML(plugin, isInstalled) {
     footerBtns = `<button class="plugin-install-btn primary" onclick="installPlugin('${plugin.id}')">⬇ Cài đặt</button>`;
   }
 
+  const iconContent = plugin.icon || '🧩';
+  const isCustomIcon = iconContent.startsWith('<svg') || iconContent.startsWith('data:image/') || iconContent.startsWith('http');
+  const iconHtml = isCustomIcon
+    ? `<div class="plugin-icon" style="padding: 6px;">${iconContent.startsWith('data:') || iconContent.startsWith('http') ? `<img src="${iconContent}" style="width:26px;height:26px;object-fit:contain;">` : iconContent}</div>`
+    : `<div class="plugin-icon">${iconContent}</div>`;
+
   return `
     <div class="plugin-card ${isInstalled ? 'is-installed' : ''}" style="--plugin-color: ${color}; --plugin-color-bg: ${colorBg}">
       <div class="plugin-card-header">
-        <div class="plugin-icon">${plugin.icon || '🧩'}</div>
+        ${iconHtml}
         <div class="plugin-meta">
           <div class="plugin-name">${plugin.name}</div>
           <div class="plugin-version">v${plugin.version || '1.0.0'} · ${plugin.author || 'Unknown'}</div>
@@ -2117,6 +2216,8 @@ async function doInstallPlugin(pluginId, config) {
     if (!res.ok) throw new Error(data.error || 'Lỗi cài đặt plugin');
     await loadInstalledPlugins(currentPluginSite);
     renderPlugins();
+    renderInstalledPlugins();
+    updatePluginMarketHeader();
     showPluginToast(`✅ Đã cài "${data.plugin?.name || pluginId}" cho ${currentPluginSite}`);
   } catch (err) {
     alert('Lỗi: ' + err.message);
@@ -2138,6 +2239,8 @@ async function uninstallPlugin(pluginId) {
     if (!res.ok) throw new Error(data.error || 'Lỗi gỡ plugin');
     await loadInstalledPlugins(currentPluginSite);
     renderPlugins();
+    renderInstalledPlugins();
+    updatePluginMarketHeader();
     showPluginToast(`🗑 Đã gỡ "${name}" khỏi ${currentPluginSite}`);
   } catch (err) {
     alert('Lỗi: ' + err.message);
@@ -2153,25 +2256,55 @@ function openPluginConfig(pluginId) {
 }
 
 function openPluginConfigModal(plugin, existingConfig) {
-  document.getElementById('plugin-config-icon').textContent = plugin.icon || '🧩';
+  const iconContent = plugin.icon || '🧩';
+  const isCustomIcon = iconContent.startsWith('<svg') || iconContent.startsWith('data:image/') || iconContent.startsWith('http');
+  const iconHeader = document.getElementById('plugin-config-icon');
+  if (iconHeader) {
+    if (isCustomIcon) {
+      iconHeader.innerHTML = iconContent.startsWith('data:') || iconContent.startsWith('http') ? `<img src="${iconContent}" style="width:28px;height:28px;object-fit:contain;">` : iconContent;
+    } else {
+      iconHeader.textContent = iconContent;
+    }
+  }
+
   document.getElementById('plugin-config-title').textContent = `Cấu hình: ${plugin.name}`;
   document.getElementById('plugin-config-site-label').textContent = `Website: ${currentPluginSite}`;
 
   const fieldsEl = document.getElementById('plugin-config-fields');
-  fieldsEl.innerHTML = (plugin.requiresConfig || []).map(field => `
-    <div class="plugin-config-field">
-      <label for="pcfg-${field.key}">${field.label}${field.required ? ' <span style="color:var(--red)">*</span>' : ''}</label>
-      <input
-        type="${field.type === 'password' ? 'password' : 'text'}"
-        id="pcfg-${field.key}"
-        data-key="${field.key}"
-        value="${existingConfig[field.key] || field.default || ''}"
-        placeholder="${field.default || ''}"
-        ${field.required ? 'required' : ''}
-      >
-      ${field.hint ? `<div class="field-hint">${field.hint}</div>` : ''}
-    </div>
-  `).join('');
+  fieldsEl.innerHTML = (plugin.requiresConfig || []).map(field => {
+    const value = existingConfig[field.key] || field.default || '';
+    if (field.type === 'select') {
+      const opts = field.options || [];
+      return `
+        <div class="plugin-config-field">
+          <label for="pcfg-${field.key}">${field.label}${field.required ? ' <span style="color:var(--red)">*</span>' : ''}</label>
+          <select
+            id="pcfg-${field.key}"
+            data-key="${field.key}"
+            ${field.required ? 'required' : ''}
+            style="width:100%; background:var(--bg-surface); border:1px solid var(--border-light); color:var(--text-primary); padding:10px; border-radius:var(--radius-sm);"
+          >
+            ${opts.map(o => `<option value="${o}" ${o === value ? 'selected' : ''}>${o}</option>`).join('')}
+          </select>
+          ${field.hint ? `<div class="field-hint">${field.hint}</div>` : ''}
+        </div>
+      `;
+    }
+    return `
+      <div class="plugin-config-field">
+        <label for="pcfg-${field.key}">${field.label}${field.required ? ' <span style="color:var(--red)">*</span>' : ''}</label>
+        <input
+          type="${field.type === 'password' ? 'password' : 'text'}"
+          id="pcfg-${field.key}"
+          data-key="${field.key}"
+          value="${value}"
+          placeholder="${field.default || ''}"
+          ${field.required ? 'required' : ''}
+        >
+        ${field.hint ? `<div class="field-hint">${field.hint}</div>` : ''}
+      </div>
+    `;
+  }).join('');
 
   document.getElementById('plugin-config-modal').style.display = 'flex';
 }
@@ -2248,9 +2381,382 @@ function showPluginToast(msg) {
 }
 
 // Admin: Add Plugin to Store UI helpers
+// ============================================================
+// PLUGIN STORE — VISUAL CONFIG FIELD BUILDER
+// ============================================================
+
+let configFieldCount = 0;
+
+function addConfigFieldRow(preset = {}) {
+  const container = document.getElementById('pstore-config-rows');
+  if (!container) return;
+
+  // Remove empty state
+  const emptyEl = document.getElementById('pstore-config-empty');
+  if (emptyEl) emptyEl.remove();
+
+  // Add header labels on first row
+  if (!container.querySelector('.config-field-row')) {
+    const header = document.createElement('div');
+    header.className = 'config-field-row-labels';
+    header.innerHTML = `
+      <span>Key (biến môi trường)</span>
+      <span>Nhãn hiển thị</span>
+      <span>Kiểu dữ liệu</span>
+      <span>Bắt buộc</span>
+      <span></span>
+    `;
+    container.appendChild(header);
+  }
+
+  const id = ++configFieldCount;
+  const row = document.createElement('div');
+  row.className = 'config-field-row';
+  row.dataset.rowId = id;
+  row.innerHTML = `
+    <input type="text"
+      class="cfg-key"
+      placeholder="VD: API_KEY"
+      value="${preset.key || ''}"
+      style="font-family:var(--font-mono); font-size:11px; text-transform:uppercase;"
+      oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9_]/g,'')"
+    >
+    <input type="text"
+      class="cfg-label"
+      placeholder="VD: API Key bí mật"
+      value="${preset.label || ''}"
+    >
+    <select class="cfg-type" onchange="toggleConfigRowOptions(this, ${id})">
+      <option value="text"      ${(preset.type||'text')==='text'    ? 'selected':''}>✏️ Văn bản</option>
+      <option value="password"  ${preset.type==='password'         ? 'selected':''}>🔒 Mật khẩu</option>
+      <option value="number"    ${preset.type==='number'           ? 'selected':''}>🔢 Số</option>
+      <option value="url"       ${preset.type==='url'              ? 'selected':''}>🔗 URL</option>
+      <option value="select"    ${preset.type==='select'           ? 'selected':''}>🔽 Danh sách (Select)</option>
+    </select>
+    <label class="config-req-toggle">
+      <input type="checkbox" class="cfg-required" ${preset.required !== false ? 'checked' : ''}>
+      <span class="config-req-label">Có</span>
+    </label>
+    <button type="button" class="config-field-delete" onclick="removeConfigFieldRow(${id})" title="Xóa trường">×</button>
+    <div class="cfg-options-row" id="cfg-options-row-${id}" style="${preset.type === 'select' ? 'display:flex;' : 'display:none;'}">
+      <label>Danh sách tùy chọn (cách nhau bởi dấu phẩy):</label>
+      <input type="text" class="cfg-options-input" placeholder="VD: Lựa chọn A, Lựa chọn B, Lựa chọn C" value="${(preset.options || []).join(', ')}">
+    </div>
+  `;
+  container.appendChild(row);
+}
+
+function toggleConfigRowOptions(selectEl, id) {
+  const rowOptions = document.getElementById(`cfg-options-row-${id}`);
+  if (rowOptions) {
+    rowOptions.style.display = selectEl.value === 'select' ? 'flex' : 'none';
+  }
+}
+
+function removeConfigFieldRow(id) {
+  const container = document.getElementById('pstore-config-rows');
+  const row = container.querySelector(`[data-row-id="${id}"]`);
+  if (row) {
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(8px)';
+    row.style.transition = 'all 0.15s ease';
+    setTimeout(() => {
+      row.remove();
+      // If no rows left, show empty state + remove header labels
+      const remaining = container.querySelectorAll('.config-field-row');
+      if (!remaining.length) {
+        const header = container.querySelector('.config-field-row-labels');
+        if (header) header.remove();
+        container.innerHTML = `<div class="pstore-config-empty" id="pstore-config-empty"><span>Không có trường nào — plugin không cần cấu hình</span></div>`;
+      }
+    }, 150);
+  }
+}
+
+function getConfigFieldsFromBuilder() {
+  const rows = document.querySelectorAll('#pstore-config-rows .config-field-row');
+  const result = [];
+  rows.forEach(row => {
+    const key   = row.querySelector('.cfg-key')?.value.trim();
+    const label = row.querySelector('.cfg-label')?.value.trim();
+    const type  = row.querySelector('.cfg-type')?.value || 'text';
+    const req   = row.querySelector('.cfg-required')?.checked !== false;
+    
+    if (key) {
+      const fieldData = { key, label: label || key, type, required: req };
+      if (type === 'select') {
+        const optionsVal = row.querySelector('.cfg-options-input')?.value || '';
+        fieldData.options = optionsVal.split(',').map(o => o.trim()).filter(Boolean);
+      }
+      result.push(fieldData);
+    }
+  });
+  return result;
+}
+
+// ============================================================
+// PLUGIN STORE — ICON & COLOR PICKERS
+// ============================================================
+
+let selectedPStoreIcon = '🧩';
+let selectedPStoreColor = '#6366f1';
+
+const ICON_PICKER_LIST = {
+  payment: ['💳', '🏦', '🪙', '💰', '💵', '💸', '🧾', '🔑'],
+  shipping: ['🚚', '📦', '✈️', '🚢', '🛵', '📍', '🗺️', '⏱️'],
+  analytics: ['📊', '📈', '📉', '📋', '🎯', '⚡', '👁️', '⚙️'],
+  seo: ['🔍', '🌐', '🏷️', '🕸️', '🕷️', '🤖', '📢', '📈'],
+  support: ['💬', '📞', '📧', '🙋', '💌', '🎧', '📢', '🗯️'],
+  other: ['🧩', '🛠️', '🔒', '🌟', '🔔', '📁', '💻', '🎨']
+};
+
+const COLOR_PALETTE_LIST = [
+  '#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
+  '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6', '#f97316'
+];
+
+function initIconAndColorPickers() {
+  selectedPStoreIcon = '🧩';
+  selectedPStoreColor = '#6366f1';
+
+  // Collapse advanced layout by default
+  const adv = document.getElementById('icon-picker-layout-advanced');
+  if (adv) adv.style.display = 'none';
+
+  const btn = document.getElementById('btn-toggle-design-icon');
+  if (btn) btn.innerHTML = '🎨 Thiết kế Icon';
+
+  // Reset simple select and color input
+  const simpleSelect = document.getElementById('pstore-icon-select');
+  if (simpleSelect) simpleSelect.value = selectedPStoreIcon;
+
+  const simpleColor = document.getElementById('pstore-color-simple');
+  if (simpleColor) simpleColor.value = selectedPStoreColor;
+
+  const simpleColorPicker = document.getElementById('pstore-color-simple-picker');
+  if (simpleColorPicker) simpleColorPicker.value = selectedPStoreColor;
+
+  // Populate color palette
+  const palette = document.getElementById('color-palette');
+  if (palette) {
+    palette.innerHTML = COLOR_PALETTE_LIST.map(color => `
+      <div class="color-palette-item${color === selectedPStoreColor ? ' active' : ''}"
+        style="background: ${color};"
+        onclick="selectPStoreColor('${color}', this)"
+      ></div>
+    `).join('');
+  }
+
+  const inputHex = document.getElementById('pstore-color');
+  if (inputHex) inputHex.value = selectedPStoreColor;
+
+  const nativeColor = document.getElementById('pstore-color-native');
+  if (nativeColor) nativeColor.value = selectedPStoreColor;
+
+  const preview = document.getElementById('icon-picker-preview');
+  if (preview) preview.textContent = selectedPStoreIcon;
+
+  const hiddenInput = document.getElementById('pstore-icon');
+  if (hiddenInput) hiddenInput.value = selectedPStoreIcon;
+
+  // Clear file input
+  const fileInput = document.getElementById('pstore-icon-file');
+  if (fileInput) fileInput.value = '';
+
+  // Populate icon grid
+  filterIconCat('all');
+}
+
+function filterIconCat(catName, btn) {
+  const container = document.getElementById('icon-picker-grid');
+  if (!container) return;
+
+  if (btn) {
+    document.querySelectorAll('.icon-cat-btn').forEach(el => el.classList.remove('active'));
+    btn.classList.add('active');
+  } else {
+    // Select first button
+    const firstBtn = document.querySelector('.icon-cat-btn[data-cat="all"]');
+    if (firstBtn) {
+      document.querySelectorAll('.icon-cat-btn').forEach(el => el.classList.remove('active'));
+      firstBtn.classList.add('active');
+    }
+  }
+
+  let items = [];
+  if (catName === 'all') {
+    items = Object.values(ICON_PICKER_LIST).flat();
+  } else {
+    items = ICON_PICKER_LIST[catName] || [];
+  }
+
+  container.innerHTML = items.map(icon => `
+    <div class="icon-picker-item${icon === selectedPStoreIcon ? ' active' : ''}"
+      onclick="selectPStoreIcon('${icon}', this)"
+    >
+      ${icon}
+    </div>
+  `).join('');
+}
+
+function selectPStoreIcon(icon, el) {
+  selectedPStoreIcon = icon;
+  document.querySelectorAll('.icon-picker-item').forEach(item => item.classList.remove('active'));
+  if (el) el.classList.add('active');
+
+  const preview = document.getElementById('icon-picker-preview');
+  if (preview) {
+    const isCustomIcon = icon.startsWith('<svg') || icon.startsWith('data:image/') || icon.startsWith('http');
+    if (isCustomIcon) {
+      preview.innerHTML = icon.startsWith('data:') || icon.startsWith('http') ? `<img src="${icon}" style="width:28px;height:28px;object-fit:contain;">` : icon;
+    } else {
+      preview.textContent = icon;
+    }
+  }
+
+  const hiddenInput = document.getElementById('pstore-icon');
+  if (hiddenInput) hiddenInput.value = icon;
+
+  // Sync back to simple select dropdown
+  const simpleSelect = document.getElementById('pstore-icon-select');
+  if (simpleSelect) {
+    // Check if select options contain this icon value
+    const hasOption = Array.from(simpleSelect.options).some(opt => opt.value === icon);
+    simpleSelect.value = hasOption ? icon : 'custom';
+  }
+}
+
+function selectPStoreColor(color, el) {
+  selectedPStoreColor = color;
+  document.querySelectorAll('.color-palette-item').forEach(item => item.classList.remove('active'));
+  if (el) {
+    el.classList.add('active');
+  } else {
+    // Find matching palette item and active it
+    const items = document.querySelectorAll('.color-palette-item');
+    items.forEach(item => {
+      // Compare hex colors (lowercase)
+      if (item.style.backgroundColor === color || item.style.backgroundColor === hexToRgbString(color)) {
+        item.classList.add('active');
+      }
+    });
+  }
+
+  const inputHex = document.getElementById('pstore-color');
+  if (inputHex) inputHex.value = color;
+
+  const nativeColor = document.getElementById('pstore-color-native');
+  if (nativeColor) nativeColor.value = color;
+
+  // Sync to simple input
+  const simpleColor = document.getElementById('pstore-color-simple');
+  if (simpleColor) simpleColor.value = color;
+
+  // Sync to simple picker
+  const simpleColorPicker = document.getElementById('pstore-color-simple-picker');
+  if (simpleColorPicker) simpleColorPicker.value = color;
+}
+
+function hexToRgbString(hex) {
+  const rgb = hexToRgb(hex);
+  return rgb ? `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})` : '';
+}
+
+function selectColorCustom(color) {
+  selectPStoreColor(color);
+}
+
+function applyColorFromHex(hex) {
+  if (/^#[0-9A-F]{6}$/i.test(hex)) {
+    selectPStoreColor(hex);
+  }
+}
+
+// Collapsible advanced toggles
+function toggleAdvancedIconPicker() {
+  const adv = document.getElementById('icon-picker-layout-advanced');
+  if (!adv) return;
+  const isHidden = adv.style.display === 'none';
+  adv.style.display = isHidden ? 'grid' : 'none';
+
+  const btn = document.getElementById('btn-toggle-design-icon');
+  if (btn) {
+    btn.innerHTML = isHidden ? '✕ Thu gọn' : '🎨 Thiết kế Icon';
+  }
+
+  // If opened, automatically switch select dropdown to 'custom'
+  if (isHidden) {
+    const sel = document.getElementById('pstore-icon-select');
+    if (sel && sel.value !== 'custom') {
+      sel.value = 'custom';
+    }
+  }
+}
+
+function syncSelectIconToVisual(val) {
+  if (val === 'custom') {
+    const adv = document.getElementById('icon-picker-layout-advanced');
+    if (adv && adv.style.display === 'none') {
+      toggleAdvancedIconPicker();
+    }
+  } else {
+    const adv = document.getElementById('icon-picker-layout-advanced');
+    if (adv && adv.style.display !== 'none') {
+      toggleAdvancedIconPicker();
+    }
+    selectPStoreIcon(val);
+  }
+}
+
+function syncSimpleColorToVisual(val) {
+  if (/^#[0-9A-F]{6}$/i.test(val)) {
+    selectPStoreColor(val);
+  }
+}
+
+function syncSimpleColorPickerToText(val) {
+  const simpleColor = document.getElementById('pstore-color-simple');
+  if (simpleColor) simpleColor.value = val;
+  selectPStoreColor(val);
+}
+
+// SVG File Upload
+function triggerSvgUpload() {
+  document.getElementById('pstore-icon-file')?.click();
+}
+
+function handleSvgUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  if (file.type === 'image/svg+xml') {
+    reader.onload = function(e) {
+      const content = e.target.result;
+      if (content.includes('<svg')) {
+        // Compress whitespace
+        const cleanSvg = content.trim().replace(/\s+/g, ' ');
+        selectPStoreIcon(cleanSvg);
+      } else {
+        alert('File SVG không hợp lệ.');
+      }
+    };
+    reader.readAsText(file);
+  } else {
+    reader.onload = function(e) {
+      selectPStoreIcon(e.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
 function openAddPluginStoreModal() {
   document.getElementById('add-plugin-store-form').reset();
   document.getElementById('pstore-price-wrap').style.display = 'none';
+  // Reset config field builder
+  const rows = document.getElementById('pstore-config-rows');
+  if (rows) rows.innerHTML = `<div class="pstore-config-empty" id="pstore-config-empty"><span>Không có trường nào — plugin không cần cấu hình</span></div>`;
+  initIconAndColorPickers();
   document.getElementById('add-plugin-store-modal').style.display = 'flex';
 }
 
@@ -2287,19 +2793,8 @@ async function submitAddPluginStore(e) {
   const free = priceType === 'free';
   const price = free ? '' : document.getElementById('pstore-price').value.trim();
   
-  const configJsonStr = document.getElementById('pstore-config-json').value.trim();
-  let requiresConfig = [];
-  if (configJsonStr) {
-    try {
-      requiresConfig = JSON.parse(configJsonStr);
-      if (!Array.isArray(requiresConfig)) {
-        throw new Error('JSON phải là một mảng dữ liệu (Array).');
-      }
-    } catch (err) {
-      alert('Định dạng cấu hình JSON không hợp lệ: ' + err.message);
-      return;
-    }
-  }
+  // Read config fields from visual builder
+  const requiresConfig = getConfigFieldsFromBuilder();
 
   try {
     const res = await authFetch('/api/plugin-store', {
