@@ -1,0 +1,8 @@
+{
+  "name": "plugin-gemini-assistant",
+  "version": "1.0.0",
+  "description": "Gemini Chat Assistant plugin for AutoWeb CMS",
+  "main": "server/routes.js",
+  "type": "module",
+  "dependencies": {}
+}

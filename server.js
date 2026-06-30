@@ -28,6 +28,7 @@ const TEMPLATE_REPOS = {
   'korean-news': 'https://github.com/tiensyk09/template-korean-news.git',
   'commandcode': 'https://github.com/tiensyk09/template-commandcode.git',
   'long-chau':   'https://github.com/tiensyk09/template-long-chau.git',
+  'travel-shop':  'https://github.com/tiensyk09/template-travel-shop.git',
 };
 
 // Local fallback nếu git clone thất bại
@@ -88,7 +89,7 @@ const DEFAULT_TEMPLATES = [
     tags: ['Tiếng Việt', 'Đặc sản', 'Du lịch'],
     color: '#0b4d48',
     demoUrl: '',
-    githubUrl: ''
+    githubUrl: 'https://github.com/tiensyk09/template-travel-shop.git'
   }
 ];
 
@@ -1149,7 +1150,7 @@ async function deploySiteInternal(siteName, creds) {
 
   const db = await readDb();
   const dbTemplate = (db.templates || []).find(t => t.id === templateName);
-  const repoUrl = dbTemplate ? dbTemplate.githubUrl : TEMPLATE_REPOS[templateName];
+  const repoUrl = (dbTemplate && dbTemplate.githubUrl) ? dbTemplate.githubUrl : TEMPLATE_REPOS[templateName];
   const localFallback = TEMPLATE_LOCAL[templateName];
 
   if (repoUrl) {
